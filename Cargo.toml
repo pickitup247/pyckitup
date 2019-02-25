@@ -10,4 +10,4 @@ rustpython_vm = { path = "../RustPython/vm", version = "*" }
 [dependencies.quicksilver]
 version = "0.3.7"
 default-features = false
-features = ["fonts"]
+features = ["fonts", "sounds"]

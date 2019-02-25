@@ -1,16 +1,12 @@
 import qs
 qs.hello()
 
-test = 0
-
 def init():
-    return {"id": 1}
+    return [1,]
 
 def update(state):
     print(state)
-    state['id'] += 1
-    test += 1
-    print(test)
+    state[0] += 1
 
 def draw(state):
     qs.hello()

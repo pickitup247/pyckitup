@@ -1,3 +1,7 @@
+#![feature(pin)]
+
+use std::pin::Pin;
+
 extern crate quicksilver;
 #[macro_use]extern crate rustpython_vm;
 mod prelude;
@@ -13,6 +17,12 @@ struct PickItUp {
 }
 
 use rustpython_vm::pyobject::DictProtocol;
+
+fn handle_err(vm: &mut VirtualMachine, py_err: PyObjectRef) {
+    let res = vm.to_pystr(&py_err)
+        .unwrap_or_else(|_| "Error, and error getting error message".into());
+    dbg!(&res);
+}
 
 impl PickItUp {
     fn load_code(&mut self) -> Result<()> {
@@ -30,9 +40,7 @@ impl PickItUp {
             let result = self.vm.run_code_obj(code, scope.clone());
             match result {
                 Err(py_err) => {
-                    let res = self.vm.to_pystr(&py_err)
-                        .unwrap_or_else(|_| "Error, and error getting error message".into());
-                    dbg!(&res);
+                    handle_err(&mut self.vm, py_err);
                 }
                 Ok(res) => {
                     dbg!(&res);
@@ -54,13 +62,61 @@ impl PickItUp {
         self.source = Rc::new(RefCell::new(Asset::new(load_file("run.py").map(|v8| String::from_utf8(v8).unwrap()))));
         self.load_code()
     }
+
+
+    fn setup_module(&mut self, window: &mut Window) -> Result<()>{
+
+        let test = |vm: &mut VirtualMachine, args: PyFuncArgs| {println!("test");  Ok(vm.get_none())};
+        let mk_module = Pin::new(Box::new(|ctx: &PyContext| -> PyObjectRef {
+            py_module!(ctx, "qs", {
+                "test" => ctx.new_rustfunc(test),
+            })
+        }));
+        let mk_module = Pin::get_mut(mk_module);
+        unsafe {
+            let mk_module = std::mem::transmute::<_, &'static fn(&PyContext) -> PyObjectRef>(mk_module);
+            self.vm.stdlib_inits.insert("test".to_string(), *mk_module);
+        }
+        Ok(())
+    }
+
 }
+
+
+    fn draw_square(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+        println!("square!");
+        Ok(vm.get_none())
+    }
+
+    fn hello(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+        // arg_check!(
+        //     vm,
+        //     args,
+        //     required = [
+        //         (url, Some(vm.ctx.str_type())),
+        //         (handler, Some(vm.ctx.function_type()))
+        //     ],
+        //     optional = [(reject_handler, Some(vm.ctx.function_type()))]
+        // );
+        println!("HELLO!");
+        Ok(vm.get_none())
+    }
+
+    pub fn mk_module(ctx: &PyContext) -> PyObjectRef {
+        py_module!(ctx, "qs", {
+            "hello" => ctx.new_rustfunc(hello),
+            "draw_square" => ctx.new_rustfunc(draw_square)
+        })
+    }
+
+    pub fn setup_qs_module(vm: &mut VirtualMachine) {
+        vm.stdlib_inits.insert("qs".to_string(), mk_module);
+    }
 
 impl State for PickItUp {
     fn new() -> Result<Self> {
         let mut vm = VirtualMachine::new();
         let source = Rc::new(RefCell::new(Asset::new(load_file("run.py").map(|v8| String::from_utf8(v8).unwrap()))));
-        setup_qs_module(&mut vm);
         let mut ret = PickItUp {
             vm,
             source,
@@ -76,7 +132,7 @@ impl State for PickItUp {
     fn event(&mut self, event: &Event, window: &mut Window) -> Result<()> {
         match event {
             Event::Key(Key::R, ButtonState::Released) => {
-                self.reload();
+                self.reload()?;
             }
             _ => {}
         };
@@ -87,44 +143,33 @@ impl State for PickItUp {
 
     fn update(&mut self, window: &mut Window) -> Result<()> {
         if let (Some(update_fn), Some(state)) = (&self.update_fn, &self.state) {
-            self.vm.invoke(Rc::clone(update_fn), PyFuncArgs::new(vec![Rc::clone(state)], vec![])).unwrap();
+            match self.vm.invoke(Rc::clone(update_fn), PyFuncArgs::new(vec![Rc::clone(state)], vec![])){
+                Err(py_err) => {
+                    handle_err(&mut self.vm, py_err);
+                }
+                Ok(_) => {
+                }
+            };
         }
         Ok(())
     }
 
     fn draw(&mut self, window: &mut Window) -> Result<()> {
         window.clear(Color::BLACK)?;
+        self.setup_module(window);
         if let (Some(draw_fn), Some(state)) = (&self.draw_fn, &self.state) {
-            self.vm.invoke(Rc::clone(draw_fn), PyFuncArgs::new(vec![Rc::clone(state)], vec![])).unwrap();
+            match self.vm.invoke(Rc::clone(draw_fn), PyFuncArgs::new(vec![Rc::clone(state)], vec![])) {
+                Err(py_err) => {
+                    handle_err(&mut self.vm, py_err);
+                }
+                Ok(_) => {
+                }
+            }
         }
         Ok(())
     }
 }
 
-fn hello(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
-    // arg_check!(
-    //     vm,
-    //     args,
-    //     required = [
-    //         (url, Some(vm.ctx.str_type())),
-    //         (handler, Some(vm.ctx.function_type()))
-    //     ],
-    //     optional = [(reject_handler, Some(vm.ctx.function_type()))]
-    // );
-    println!("HELLO!");
-    Ok(vm.get_none())
-}
-const BROWSER_NAME: &str = "qs";
-
-pub fn mk_module(ctx: &PyContext) -> PyObjectRef {
-    py_module!(ctx, BROWSER_NAME, {
-        "hello" => ctx.new_rustfunc(hello)
-    })
-}
-
-pub fn setup_qs_module(vm: &mut VirtualMachine) {
-    vm.stdlib_inits.insert(BROWSER_NAME.to_string(), mk_module);
-}
 
 fn main() {
     run::<PickItUp>("set-cursor", Vector::new(800, 600), Settings::default());

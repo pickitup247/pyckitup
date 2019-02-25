@@ -1,0 +1,13 @@
+[package]
+name = "pickitup"
+version = "0.1.0"
+authors = ["Ricky Han <rickylqhan@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+rustpython_vm = { path = "../RustPython/vm", version = "*" }
+
+[dependencies.quicksilver]
+version = "0.3.7"
+default-features = false
+features = ["fonts"]

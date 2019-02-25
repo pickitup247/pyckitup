@@ -25,4 +25,7 @@ pub use rustpython_vm::{
     compile,
     VirtualMachine,
     pyobject::PyObjectPayload,
+    stdlib::StdlibInitFunc,
 };
+
+pub const MOD_NAME: &'static str = "qs";

@@ -1,11 +1,11 @@
-#![feature(pin)]
-
-use std::pin::Pin;
-
 extern crate quicksilver;
+extern crate num_traits;
 #[macro_use]extern crate rustpython_vm;
 mod prelude;
+mod qs;
 use crate::prelude::*;
+use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol};
+
 
 struct PickItUp {
     vm: VirtualMachine,
@@ -16,12 +16,11 @@ struct PickItUp {
     state: Option<PyObjectRef>,
 }
 
-use rustpython_vm::pyobject::DictProtocol;
 
 fn handle_err(vm: &mut VirtualMachine, py_err: PyObjectRef) {
     let res = vm.to_pystr(&py_err)
         .unwrap_or_else(|_| "Error, and error getting error message".into());
-    dbg!(&res);
+    panic!(res);
 }
 
 impl PickItUp {
@@ -31,30 +30,28 @@ impl PickItUp {
             let code =
                 compile::compile(&source, &mode, "<qs>".to_string(), self.vm.ctx.code_type())
                     .map_err(|err| {
-                        dbg!(&err);
                         format!("Error parsing Python code: {}", err)
                     }).unwrap();
 
             let builtin = self.vm.get_builtin_scope();
             let scope = self.vm.context().new_scope(Some(builtin));
             let result = self.vm.run_code_obj(code, scope.clone());
-            match result {
-                Err(py_err) => {
-                    handle_err(&mut self.vm, py_err);
-                }
-                Ok(res) => {
-                    dbg!(&res);
-                    let init_fn = res.get_item("init").unwrap();
-                    self.state = Some(self.vm.invoke(Rc::clone(&init_fn), PyFuncArgs::new(vec![], vec![])).unwrap());
-                    self.init_fn = Some(init_fn);
+            // match result {
+            //     Err(py_err) => {
+            //         handle_err(&mut self.vm, py_err);
+            //     }
+            //     Ok(res) => {
+            //     }
+            // };
 
-                    self.update_fn = Some(res.get_item("update").unwrap());
-                    self.draw_fn = Some(res.get_item("draw").unwrap());
-                }
-            };
+            let init_fn = scope.get_item("init").unwrap();
+            self.state = Some(self.vm.invoke(Rc::clone(&init_fn), PyFuncArgs::new(vec![], vec![])).unwrap());
+            self.init_fn = Some(init_fn);
+            self.update_fn = Some(scope.get_item("update").unwrap());
+            self.draw_fn = Some(scope.get_item("draw").unwrap());
 
             Ok(())
-        });
+        })?;
         Ok(())
     }
 
@@ -63,59 +60,28 @@ impl PickItUp {
         self.load_code()
     }
 
-
-    fn setup_module(&mut self, window: &mut Window) -> Result<()>{
-
-        let test = |vm: &mut VirtualMachine, args: PyFuncArgs| {println!("test");  Ok(vm.get_none())};
-        let mk_module = Pin::new(Box::new(|ctx: &PyContext| -> PyObjectRef {
-            py_module!(ctx, "qs", {
-                "test" => ctx.new_rustfunc(test),
+    fn setup_module(&mut self) -> Result<()>{
+        let mk_module = Box::new(move |ctx: &PyContext| -> PyObjectRef {
+            py_module!(ctx, MOD_NAME, {
+                "draw_rect" => ctx.new_rustfunc(qs::draw_rect),
             })
-        }));
-        let mk_module = Pin::get_mut(mk_module);
-        unsafe {
-            let mk_module = std::mem::transmute::<_, &'static fn(&PyContext) -> PyObjectRef>(mk_module);
-            self.vm.stdlib_inits.insert("test".to_string(), *mk_module);
-        }
+        });
+        self.vm.stdlib_inits.insert(MOD_NAME.to_string(), mk_module);
         Ok(())
     }
 
+    fn update_window_ptr(&mut self, window: &mut Window) -> Result<()> {
+        let ptr = (window as *mut Window) as usize;
+        let modules = self.vm.sys_module.get_attr("modules").unwrap();
+        let qs = modules.get_item(MOD_NAME).unwrap();
+        qs.set_item(&self.vm.ctx, "window", self.vm.new_int(ptr));
+        Ok(())
+    }
 }
-
-
-    fn draw_square(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
-        println!("square!");
-        Ok(vm.get_none())
-    }
-
-    fn hello(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
-        // arg_check!(
-        //     vm,
-        //     args,
-        //     required = [
-        //         (url, Some(vm.ctx.str_type())),
-        //         (handler, Some(vm.ctx.function_type()))
-        //     ],
-        //     optional = [(reject_handler, Some(vm.ctx.function_type()))]
-        // );
-        println!("HELLO!");
-        Ok(vm.get_none())
-    }
-
-    pub fn mk_module(ctx: &PyContext) -> PyObjectRef {
-        py_module!(ctx, "qs", {
-            "hello" => ctx.new_rustfunc(hello),
-            "draw_square" => ctx.new_rustfunc(draw_square)
-        })
-    }
-
-    pub fn setup_qs_module(vm: &mut VirtualMachine) {
-        vm.stdlib_inits.insert("qs".to_string(), mk_module);
-    }
 
 impl State for PickItUp {
     fn new() -> Result<Self> {
-        let mut vm = VirtualMachine::new();
+        let vm = VirtualMachine::new();
         let source = Rc::new(RefCell::new(Asset::new(load_file("run.py").map(|v8| String::from_utf8(v8).unwrap()))));
         let mut ret = PickItUp {
             vm,
@@ -125,6 +91,7 @@ impl State for PickItUp {
             init_fn: None,
             state: None,
         };
+        ret.setup_module()?;
         ret.load_code()?;
         Ok(ret)
     }
@@ -140,8 +107,8 @@ impl State for PickItUp {
         Ok(())
     }
 
-
     fn update(&mut self, window: &mut Window) -> Result<()> {
+        self.update_window_ptr(window)?;
         if let (Some(update_fn), Some(state)) = (&self.update_fn, &self.state) {
             match self.vm.invoke(Rc::clone(update_fn), PyFuncArgs::new(vec![Rc::clone(state)], vec![])){
                 Err(py_err) => {
@@ -156,7 +123,6 @@ impl State for PickItUp {
 
     fn draw(&mut self, window: &mut Window) -> Result<()> {
         window.clear(Color::BLACK)?;
-        self.setup_module(window);
         if let (Some(draw_fn), Some(state)) = (&self.draw_fn, &self.state) {
             match self.vm.invoke(Rc::clone(draw_fn), PyFuncArgs::new(vec![Rc::clone(state)], vec![])) {
                 Err(py_err) => {

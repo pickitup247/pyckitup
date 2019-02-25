@@ -1346,6 +1346,7 @@ dependencies = [
 name = "pickitup"
 version = "0.1.0"
 dependencies = [
+ "num-traits 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "quicksilver 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustpython_vm 0.1.0",
 ]

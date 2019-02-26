@@ -11,13 +11,13 @@ macro_rules! decl_shape_fn {
                 required = [(loc, None), (color, None)],
                 optional = [(transform, None), (z, None)]
             );
-            let z = to_i32(&z.unwrap_or(&Rc::clone(&vm.new_int(0))));
-            let window = window(vm);
             let coord = $shape_fn(loc);
             let color = get_color_arg(color);
             let transform = transform
                 .map(|t| get_tranform_arg(t))
                 .unwrap_or(Transform::IDENTITY);
+            let z = to_i32(&z.unwrap_or(&Rc::clone(&vm.new_int(0))));
+            let window = window_mut(vm);
             window.draw_ex(&coord, Col(color), transform, z);
             Ok(vm.get_none())
         }
@@ -28,6 +28,86 @@ decl_shape_fn!(rect, get_rect_arg);
 decl_shape_fn!(circ, get_circ_arg);
 decl_shape_fn!(triangle, get_triangle_arg);
 decl_shape_fn!(line, get_line_arg);
+
+fn init_images(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!(
+        vm,
+        args,
+        required = [(l, Some(vm.ctx.list_type()))]
+    );
+    let resources = resources_mut(vm);
+    for image in get_elements(l).iter() {
+        let image_params = get_elements(image);
+        let name = objstr::get_value(image_params.get(0).unwrap());
+        let path = objstr::get_value(image_params.get(1).unwrap());
+        resources.0.push((name, path));
+    }
+    Ok(vm.get_none())
+}
+
+fn init_anims(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!(
+        vm,
+        args,
+        required = [(l, Some(vm.ctx.list_type()))]
+    );
+    let resources = resources_mut(vm);
+    for anim in get_elements(l).iter() {
+        let anim_params = get_elements(anim);
+        let name = objstr::get_value(anim_params.get(0).unwrap());
+        let path = objstr::get_value(anim_params.get(1).unwrap());
+        let w = to_usize(anim_params.get(2).unwrap());
+        let h = to_usize(anim_params.get(3).unwrap());
+        let dur = to_f64(anim_params.get(4).unwrap());
+
+        resources.1.push((name, path, (w, h, dur)));
+    }
+    Ok(vm.get_none())
+}
+
+fn init_sounds(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!(
+        vm,
+        args,
+        required = [(l, Some(vm.ctx.list_type()))]
+    );
+    let resources = resources_mut(vm);
+    for sound in get_elements(l).iter() {
+        let sound_params = get_elements(sound);
+        let name = objstr::get_value(sound_params.get(0).unwrap());
+        let path = objstr::get_value(sound_params.get(1).unwrap());
+        resources.2.push((name, path));
+    }
+    Ok(vm.get_none())
+}
+
+fn sprite(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!(
+        vm,
+        args,
+        required = [
+            (name, Some(vm.ctx.str_type())),
+            (loc, None)
+        ],
+        optional = [(transform, None), (z, None)]
+    );
+
+    let name = objstr::get_value(name);
+    let coord = get_rect_arg(loc);
+    let transform = transform
+        .map(|t| get_tranform_arg(t))
+        .unwrap_or(Transform::IDENTITY);
+    let z = to_i32(&z.unwrap_or(&Rc::clone(&vm.new_int(0))));
+
+    let (window, sprites) = window_sprites_mut(vm);
+    sprites.execute(|sprites| {
+        let im = sprites.get_img(&name).unwrap();
+        window.draw_ex(&coord, Img(im), transform, z);
+        Ok(())
+    }).unwrap();
+    Ok(vm.get_none())
+}
+
 
 fn get_color_arg(loc: &PyObjectRef) -> Color {
     let rgba = get_elements(loc);
@@ -121,19 +201,59 @@ fn get_circ_arg(loc: &PyObjectRef) -> Circle {
     Circle::new((p0x, p0y), r)
 }
 
-fn window(vm: &mut VirtualMachine) -> &mut Window {
+fn sprites_mut(vm: &mut VirtualMachine) -> &mut Asset<Sprites> {
+    let modules = vm.sys_module.get_attr("modules").unwrap();
+    let qs = modules.get_item(MOD_NAME).unwrap();
+    let ptr = qs.get_item("sprites").unwrap();
+    let ptr = rustpython_vm::obj::objint::get_value(&ptr)
+        .to_usize()
+        .unwrap();
+    unsafe { &mut *(ptr as *mut Asset<Sprites>) }
+}
+
+fn resources_mut(vm: &mut VirtualMachine) -> &mut Resources {
+    let modules = vm.sys_module.get_attr("modules").unwrap();
+    let qs = modules.get_item(MOD_NAME).unwrap();
+    let ptr = qs.get_item("resources").unwrap();
+    let ptr = rustpython_vm::obj::objint::get_value(&ptr)
+        .to_usize()
+        .unwrap();
+    unsafe { &mut *(ptr as *mut Resources) }
+}
+
+fn window_sprites_mut(vm: &mut VirtualMachine) -> (&mut Window, &mut Asset<Sprites>) {
     let modules = vm.sys_module.get_attr("modules").unwrap();
     let qs = modules.get_item(MOD_NAME).unwrap();
     let ptr = qs.get_item("window").unwrap();
     let ptr = rustpython_vm::obj::objint::get_value(&ptr)
         .to_usize()
         .unwrap();
-    let window: &mut Window = unsafe { &mut *(ptr as *mut Window) };
-    window
+    let sprptr = qs.get_item("sprites").unwrap();
+    let sprptr = rustpython_vm::obj::objint::get_value(&sprptr)
+        .to_usize()
+        .unwrap();
+    (
+        unsafe { &mut *(ptr as *mut Window) },
+        unsafe { &mut *(sprptr as *mut Asset<Sprites>) }
+    )
+}
+
+fn window_mut(vm: &mut VirtualMachine) -> &mut Window {
+    let modules = vm.sys_module.get_attr("modules").unwrap();
+    let qs = modules.get_item(MOD_NAME).unwrap();
+    let ptr = qs.get_item("window").unwrap();
+    let ptr = rustpython_vm::obj::objint::get_value(&ptr)
+        .to_usize()
+        .unwrap();
+    unsafe { &mut *(ptr as *mut Window) }
 }
 
 fn to_i32(p: &PyObjectRef) -> i32 {
     objint::get_value(p).to_i32().unwrap()
+}
+
+fn to_usize(p: &PyObjectRef) -> usize {
+    objint::get_value(p).to_usize().unwrap()
 }
 
 fn to_f32(p: &PyObjectRef) -> f32 {
@@ -144,11 +264,26 @@ fn to_f32(p: &PyObjectRef) -> f32 {
     }
 }
 
+fn to_f64(p: &PyObjectRef) -> f64 {
+    match &p.borrow().payload {
+        PyObjectPayload::Integer { value } => value.to_i32().unwrap() as f64,
+        PyObjectPayload::Float { value } => *value as f64,
+        f => panic!("TODO {:#?}", f),
+    }
+}
+
+
 pub fn mk_module(ctx: &PyContext) -> PyObjectRef {
     py_module!(ctx, MOD_NAME, {
         "rect" => ctx.new_rustfunc(rect),
         "circ" => ctx.new_rustfunc(circ),
         "triangle" => ctx.new_rustfunc(triangle),
         "line" => ctx.new_rustfunc(line),
+
+        "init_images" => ctx.new_rustfunc(init_images),
+        "init_anims" => ctx.new_rustfunc(init_anims),
+        "init_sounds" => ctx.new_rustfunc(init_sounds),
+
+        "sprite" => ctx.new_rustfunc(sprite),
     })
 }

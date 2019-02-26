@@ -5,15 +5,12 @@ use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol, FromPyObjectRef, 
 macro_rules! decl_shape_fn {
     ($fn_name: tt, $shape_fn: expr) => {
         fn $fn_name(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
-            dbg!(&args);
             arg_check!(
                 vm,
                 args,
                 required = [(loc, None), (color, None)],
-                optional = [(transform, None), (z, Some(vm.ctx.int_type()))]
+                optional = [(transform, Some(vm.ctx.list_type())), (z, Some(vm.ctx.int_type()))]
             );
-            dbg!(args.args.len());
-            dbg!(z);
             let coord = $shape_fn(loc);
             let color = get_color_arg(color);
             let transform = transform
@@ -85,6 +82,25 @@ fn init_sounds(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     Ok(vm.get_none())
 }
 
+fn sound(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!(
+        vm,
+        args,
+        required = [
+            (name, Some(vm.ctx.str_type()))
+        ],
+        optional = [(transform, None), (z, None)]
+    );
+
+    let name = objstr::get_value(name);
+    let (window, sprites) = window_sprites_mut(vm);
+    sprites.execute(|sprites| {
+        let im = sprites.get_sound(&name).unwrap().play();
+        Ok(())
+    }).unwrap();
+    Ok(vm.get_none())
+}
+
 fn sprite(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     arg_check!(
         vm,
@@ -132,11 +148,32 @@ fn anim(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
 
     let (window, sprites) = window_sprites_mut(vm);
     sprites.execute(|sprites| {
-        let im = sprites.get_anim(&name).unwrap().current_frame();
+        let im = sprites.get_anim(&name).expect(&format!("no animation called {}", name))
+            .current_frame();
         window.draw_ex(&coord, Img(im), transform, z);
         Ok(())
     }).unwrap();
     Ok(vm.get_none())
+}
+
+fn mouse_pos(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!(vm, args);
+    let window  = window_mut(vm);
+    let Vector {x,y} = window.mouse().pos();
+    let d = vm.new_dict();
+    d.set_item(&vm.ctx, "x", vm.new_int(x));
+    d.set_item(&vm.ctx, "y", vm.new_int(y));
+    Ok(d)
+}
+
+fn mouse_wheel_delta(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!(vm, args);
+    let window  = window_mut(vm);
+    let Vector {x,y} = window.mouse().wheel();
+    let d = vm.new_dict();
+    d.set_item(&vm.ctx, "x", vm.new_int(x));
+    d.set_item(&vm.ctx, "y", vm.new_int(y));
+    Ok(d)
 }
 
 
@@ -311,11 +348,16 @@ pub fn mk_module(ctx: &PyContext) -> PyObjectRef {
         "triangle" => ctx.new_rustfunc(triangle),
         "line" => ctx.new_rustfunc(line),
 
+        "sprite" => ctx.new_rustfunc(sprite),
+        "anim" => ctx.new_rustfunc(anim),
+        "sound" => ctx.new_rustfunc(sound),
+
         "init_images" => ctx.new_rustfunc(init_images),
         "init_anims" => ctx.new_rustfunc(init_anims),
         "init_sounds" => ctx.new_rustfunc(init_sounds),
 
-        "sprite" => ctx.new_rustfunc(sprite),
-        "anim" => ctx.new_rustfunc(anim),
+        "mouse_pos" => ctx.new_rustfunc(mouse_pos),
+        "mouse_wheel_delta" => ctx.new_rustfunc(mouse_wheel_delta),
+
     })
 }

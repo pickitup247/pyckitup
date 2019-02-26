@@ -18,9 +18,9 @@ struct PickItUp {
 
     update_fn: Option<PyObjectRef>,
     draw_fn: Option<PyObjectRef>,
+    event_fn: Option<PyObjectRef>,
     state: Option<PyObjectRef>,
 
-    /// images, anims, sounds
     resources: Resources,
 }
 
@@ -67,6 +67,7 @@ impl PickItUp {
 
             self.update_fn = Some(scope.get_item("update").expect("no update function"));
             self.draw_fn = Some(scope.get_item("draw").expect("no draw function"));
+            self.event_fn = Some(scope.get_item("event").expect("no event function"));
 
             let sprites_ptr = (self.sprites.as_ref().unwrap() as *const Asset<Sprites>) as usize;
             qs.set_item(&self.vm.ctx, "sprites", self.vm.new_int(sprites_ptr));
@@ -121,6 +122,7 @@ impl State for PickItUp {
 
             update_fn: None,
             draw_fn: None,
+            event_fn: None,
             state: None,
             resources,
         };
@@ -130,12 +132,26 @@ impl State for PickItUp {
     }
 
     fn event(&mut self, event: &Event, window: &mut Window) -> Result<()> {
-        match event {
-            Event::Key(Key::R, ButtonState::Released) => {
-                self.reload()?;
+        // match event {
+        //     Event::Key(Key::R, ButtonState::Released) => {
+        //         self.reload()?;
+        //     }
+        //     _ => {}
+        // };
+
+
+        if let (Some(event_fn), Some(state)) = (&self.event_fn, &self.state) {
+            let evt = to_pyobjref(&mut self.vm, event);
+            match self.vm.invoke(
+                Rc::clone(event_fn),
+                PyFuncArgs::new(vec![Rc::clone(state), evt], vec![]),
+            ) {
+                Err(py_err) => {
+                    handle_err(&mut self.vm, py_err);
+                }
+                Ok(_) => {}
             }
-            _ => {}
-        };
+        }
 
         Ok(())
     }
@@ -179,6 +195,57 @@ impl State for PickItUp {
         }
         Ok(())
     }
+}
+
+fn to_pyobjref(vm: &mut VirtualMachine, event: &Event) -> PyObjectRef {
+    let d = vm.new_dict();
+    macro_rules! set {
+        ($d:ident, $key:expr, $val:ident) => {
+            d.set_item(&vm.ctx, stringify!($key), vm.new_str(stringify!($val).to_owned()));
+        }
+    };
+    macro_rules! set_str {
+        ($d:ident, $key:expr, $val:expr) => {
+            d.set_item(&vm.ctx, stringify!($key), vm.new_str($val.to_owned()));
+        }
+    };
+    match event {
+        Event::Closed => { set!(d, event, closed); },
+        Event::Focused => {set!(d, event, focused);},
+        Event::Unfocused => { set!(d, event, unfocused); }
+        Event::Key(key, state) => {
+            set!(d, event, key);
+            set_str!(d, key, format!("{:?}", key));
+            set_str!(d, state, format!("{:?}", state));
+        },
+        Event::Typed(c) => {
+            set!(d, event, key);
+            set_str!(d, char, format!("{:?}", c));
+        },
+        Event::MouseMoved(v) => {
+            set!(d, event, mouse_moved);
+            d.set_item(&vm.ctx, "x", vm.new_int(v.x));
+            d.set_item(&vm.ctx, "y", vm.new_int(v.y));
+        },
+        Event::MouseEntered => { set!(d, event, mouse_entered); }
+        Event::MouseExited => { set!(d, event, mouse_exited); }
+        Event::MouseWheel(v) => {
+            set!(d, event, mouse_wheel);
+            d.set_item(&vm.ctx, "x", vm.new_int(v.x));
+            d.set_item(&vm.ctx, "y", vm.new_int(v.y));
+        } ,
+        Event::MouseButton(button, state) => {
+            set!(d, event, mouse_button);
+            set_str!(d, button, format!("{:?}", button));
+            set_str!(d, state, format!("{:?}", state));
+        },
+        // Event::GamepadAxis(i32, GamepadAxis, f32),
+        // Event::GamepadButton(i32, GamepadButton, ButtonState),
+        // Event::GamepadConnected(i32),
+        // Event::GamepadDisconnected(i32)
+        t => panic!("TODO  {:#?}",  t),
+    }
+    d
 }
 
 fn main() {

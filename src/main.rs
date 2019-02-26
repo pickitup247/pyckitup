@@ -142,6 +142,14 @@ impl State for PickItUp {
 
     fn update(&mut self, window: &mut Window) -> Result<()> {
         self.update_window_ptr(window)?;
+
+        if let Some(ref mut sprites) = &mut self.sprites {
+            sprites.execute(|spr| {
+                spr.update_anim(window)?;
+                Ok(())
+            })?;
+        }
+
         if let (Some(update_fn), Some(state)) = (&self.update_fn, &self.state) {
             match self.vm.invoke(
                 Rc::clone(update_fn),

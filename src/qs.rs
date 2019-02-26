@@ -5,18 +5,22 @@ use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol, FromPyObjectRef, 
 macro_rules! decl_shape_fn {
     ($fn_name: tt, $shape_fn: expr) => {
         fn $fn_name(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+            dbg!(&args);
             arg_check!(
                 vm,
                 args,
                 required = [(loc, None), (color, None)],
-                optional = [(transform, None), (z, None)]
+                optional = [(transform, None), (z, Some(vm.ctx.int_type()))]
             );
+            dbg!(args.args.len());
+            dbg!(z);
             let coord = $shape_fn(loc);
             let color = get_color_arg(color);
             let transform = transform
                 .map(|t| get_tranform_arg(t))
                 .unwrap_or(Transform::IDENTITY);
-            let z = to_i32(&z.unwrap_or(&Rc::clone(&vm.new_int(0))));
+            let z = z.map(|z|to_i32(z)).unwrap_or(0);
+            dbg!(z);
             let window = window_mut(vm);
             window.draw_ex(&coord, Col(color), transform, z);
             Ok(vm.get_none())
@@ -102,6 +106,33 @@ fn sprite(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     let (window, sprites) = window_sprites_mut(vm);
     sprites.execute(|sprites| {
         let im = sprites.get_img(&name).unwrap();
+        window.draw_ex(&coord, Img(im), transform, z);
+        Ok(())
+    }).unwrap();
+    Ok(vm.get_none())
+}
+
+fn anim(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!(
+        vm,
+        args,
+        required = [
+            (name, Some(vm.ctx.str_type())),
+            (loc, None)
+        ],
+        optional = [(transform, None), (z, None)]
+    );
+
+    let name = objstr::get_value(name);
+    let coord = get_rect_arg(loc);
+    let transform = transform
+        .map(|t| get_tranform_arg(t))
+        .unwrap_or(Transform::IDENTITY);
+    let z = to_i32(&z.unwrap_or(&Rc::clone(&vm.new_int(0))));
+
+    let (window, sprites) = window_sprites_mut(vm);
+    sprites.execute(|sprites| {
+        let im = sprites.get_anim(&name).unwrap().current_frame();
         window.draw_ex(&coord, Img(im), transform, z);
         Ok(())
     }).unwrap();
@@ -285,5 +316,6 @@ pub fn mk_module(ctx: &PyContext) -> PyObjectRef {
         "init_sounds" => ctx.new_rustfunc(init_sounds),
 
         "sprite" => ctx.new_rustfunc(sprite),
+        "anim" => ctx.new_rustfunc(anim),
     })
 }

@@ -21,6 +21,7 @@ pub use quicksilver::{
     load_file,
     sound::Sound,
     Error, Future, Result,
+    saving::*,
 };
 
 pub use rustpython_vm::{

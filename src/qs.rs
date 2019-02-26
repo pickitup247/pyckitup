@@ -11,13 +11,15 @@ macro_rules! decl_shape_fn {
                 required = [(loc, None), (color, None)],
                 optional = [(transform, Some(vm.ctx.list_type())), (z, Some(vm.ctx.int_type()))]
             );
+
+            dbg!(&loc);
             let coord = $shape_fn(loc);
             let color = get_color_arg(color);
             let transform = transform
                 .map(|t| get_tranform_arg(t))
                 .unwrap_or(Transform::IDENTITY);
             let z = z.map(|z|to_i32(z)).unwrap_or(0);
-            dbg!(z);
+            dbg!((coord, color, transform, z));
             let window = window_mut(vm);
             window.draw_ex(&coord, Col(color), transform, z);
             Ok(vm.get_none())

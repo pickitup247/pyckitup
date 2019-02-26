@@ -11,4 +11,4 @@ num-traits = "0.2"
 [dependencies.quicksilver]
 version = "0.3.7"
 default-features = false
-features = ["fonts", "sounds"]
+features = ["fonts", "sounds", "saving"]

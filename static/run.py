@@ -42,15 +42,16 @@ def update(state):
 def draw(state):
     p0 = state["p0"]
     p1 = state["p1"]
-
-    # qs.circ( [p0, 30.], red)
-    # qs.triangle( [ p0, p1, state["p2"], ], green)
-    qs.sprite("crab", [p0, p1], z=1)
-    qs.anim("crab-left", [p0, p1], z=1)
-
     transform = rotate(state["deg"])
-    # qs.rect( [p0, p1], blue, transform=transform, z=0)
+    qs.rect([p0, [100,100]], green, transform=transform,z=1)
+    qs.triangle( [ p0, p1, state["p2"], ],green, transform=transform, z=10)
+    # qs.circ( [p0, 30.], red)
+    # qs.sprite("crab", [p0, p1], z=1)
+    # qs.anim("crab-left", [p0, p1], z=1)
+    # qs.rect( [p0, p1], blue, transform=transform, z=1)
     # qs.anim("crab-up", [p0, p1], transform=transform, z=1)
+
+
 
 
 def event(state, event):

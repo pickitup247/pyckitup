@@ -52,15 +52,12 @@ impl Sprites {
                 sounds
             });
 
-
         let fut_items = join_all(img_futs)
             .map(|vec| {
                 let mut items = HashMap::new();
                 for (src, img) in vec.into_iter() {
                     items.insert(src.to_string(), img);
                 }
-
-
                 items
             });
 

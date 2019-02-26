@@ -12,8 +12,6 @@ use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol};
 
 struct PickItUp {
     vm: VirtualMachine,
-    source: Rc<RefCell<Asset<String>>>,
-
     sprites: Option<Asset<Sprites>>,
 
     update_fn: Option<PyObjectRef>,
@@ -22,67 +20,66 @@ struct PickItUp {
     state: Option<PyObjectRef>,
 
     resources: Resources,
+    loaded: bool,
 }
 
-fn handle_err(vm: &mut VirtualMachine, py_err: PyObjectRef) {
-    let res = vm
+fn handle_err(vm: &mut VirtualMachine, py_err: PyObjectRef) -> Result<()> {
+    return Err(Error::ContextError(vm
         .to_pystr(&py_err)
-        .unwrap_or_else(|_| "Error, and error getting error message".into());
-    panic!(res);
+        .unwrap_or_else(|_| "Error, and error getting error message".into())));
 }
 
 impl PickItUp {
-    fn load_code(&mut self) -> Result<()> {
-        Rc::clone(&self.source).borrow_mut().execute(|source| {
-            let mode = compile::Mode::Exec;
-            let code =
-                compile::compile(&source, &mode, "<qs>".to_string(), self.vm.ctx.code_type())
-                    .map_err(|err| format!("Error parsing Python code: {}", err))
-                    .expect("cannot compile");
+    fn load_code(&mut self, mut source: &str) -> Result<()> {
+        let mode = compile::Mode::Exec;
+        let code =
+            compile::compile(&source, &mode, "<qs>".to_string(), self.vm.ctx.code_type())
+                .map_err(|err| Error::ContextError(format!("Error parsing Python code: {}", err)))?;
 
-            let builtin = self.vm.get_builtin_scope();
-            let scope = self.vm.context().new_scope(Some(builtin));
-            let result = self.vm.run_code_obj(code, scope.clone());
-            match result {
-                Err(py_err) => {
-                    handle_err(&mut self.vm, py_err);
-                }
-                Ok(_res) => {}
-            };
+        let builtin = self.vm.get_builtin_scope();
+        let scope = self.vm.context().new_scope(Some(builtin));
+        let result = self.vm.run_code_obj(code, scope.clone());
+        match result {
+            Err(py_err) => {
+                handle_err(&mut self.vm, py_err)?;
+            }
+            Ok(_res) => {
 
-            let resources_ptr = (&self.resources as *const Resources) as usize;
-            let modules = self.vm.sys_module.get_attr("modules").expect("no attr modules");
-            let qs = modules.get_item(MOD_NAME).expect("no module called qs");
-            qs.set_item(&self.vm.ctx, "resources", self.vm.new_int(resources_ptr));
+            }
+        };
 
-            let init_fn = scope.get_item("init").expect("no init function");
-            self.state = Some(
-                self.vm
-                    .invoke(Rc::clone(&init_fn), PyFuncArgs::new(vec![], vec![]))
-                    .expect("cannot invoke init function"),
-            );
-            dbg!(&self.resources);
-            // create sprites based on resources
-            self.sprites = Some(Asset::new(Sprites::new(self.resources.clone())));
+        let resources_ptr = (&self.resources as *const Resources) as usize;
+        let modules = self.vm.sys_module.get_attr("modules").ok_or(Error::ContextError("no attr modules".to_owned()))?;
+        let qs = modules.get_item(MOD_NAME).ok_or(Error::ContextError("no module called qs".to_owned()))?;
+        qs.set_item(&self.vm.ctx, "resources", self.vm.new_int(resources_ptr));
 
-            self.update_fn = Some(scope.get_item("update").expect("no update function"));
-            self.draw_fn = Some(scope.get_item("draw").expect("no draw function"));
-            self.event_fn = Some(scope.get_item("event").expect("no event function"));
+        let init_fn = scope.get_item("init").ok_or(Error::ContextError("no init function".to_owned()))?;
+        self.state = Some(
+            self.vm
+                .invoke(Rc::clone(&init_fn), PyFuncArgs::new(vec![], vec![]))
+                .map_err(|_|Error::ContextError("cannot invoke init function".to_owned()))?,
+        );
+        // create sprites based on resources
+        self.sprites = Some(Asset::new(Sprites::new(self.resources.clone())));
 
-            let sprites_ptr = (self.sprites.as_ref().unwrap() as *const Asset<Sprites>) as usize;
-            qs.set_item(&self.vm.ctx, "sprites", self.vm.new_int(sprites_ptr));
+        self.update_fn = Some(scope.get_item("update").ok_or(Error::ContextError("no update function".to_owned()))?);
+        self.draw_fn = Some(scope.get_item("draw").ok_or(Error::ContextError("no draw function".to_owned()))?);
+        self.event_fn = Some(scope.get_item("event").ok_or(Error::ContextError("no event function".to_owned()))?);
 
-            Ok(())
-        })?;
+        let sprites_ptr = (self.sprites.as_ref().unwrap() as *const Asset<Sprites>) as usize;
+        qs.set_item(&self.vm.ctx, "sprites", self.vm.new_int(sprites_ptr));
+
+        self.loaded = true;
+
         Ok(())
     }
 
-    fn reload(&mut self) -> Result<()> {
-        self.source = Rc::new(RefCell::new(Asset::new(
-            load_file("run.py").map(|v8| String::from_utf8(v8).expect("cannot load run.py")),
-        )));
-        self.load_code()
-    }
+    // fn reload(&mut self) -> Result<()> {
+    //     self.source = Asset::new(
+    //         load_file("run.py").map(|v8| String::from_utf8(v8).unwrap()),
+    //     );
+    //     self.load_code()
+    // }
 
     fn setup_module(&mut self) -> Result<()> {
         self.vm
@@ -94,8 +91,8 @@ impl PickItUp {
 
     fn update_window_ptr(&mut self, window: &mut Window) -> Result<()> {
         let window_ptr = (window as *mut Window) as usize;
-        let modules = self.vm.sys_module.get_attr("modules").expect("modules");
-        let qs = modules.get_item(MOD_NAME).expect("MOD_NAME");
+        let modules = self.vm.sys_module.get_attr("modules").ok_or(Error::ContextError("modules".to_owned()))?;
+        let qs = modules.get_item(MOD_NAME).ok_or(Error::ContextError("MOD_NAME".to_owned()))?;
         qs.set_item(&self.vm.ctx, "window", self.vm.new_int(window_ptr));
 
         if self.sprites.is_some() {
@@ -110,14 +107,10 @@ impl PickItUp {
 impl State for PickItUp {
     fn new() -> Result<Self> {
         let vm = VirtualMachine::new();
-        let source = Rc::new(RefCell::new(Asset::new(
-            load_file("run.py").map(|v8| String::from_utf8(v8).expect("cannot convert from utf8")),
-        )));
         let sprites = None;
         let resources = (vec![],vec![],vec![]);
         let mut ret = PickItUp {
             vm,
-            source,
             sprites,
 
             update_fn: None,
@@ -125,9 +118,19 @@ impl State for PickItUp {
             event_fn: None,
             state: None,
             resources,
+            loaded: false,
         };
         ret.setup_module()?;
-        ret.load_code()?;
+        // save_raw("test", "run.py", "import qs\n".as_bytes())?;
+        let source = if cfg!(wasm32) {
+            String::from_utf8(load_raw("test", "run.py")?).unwrap()
+        } else {
+            use std::io::Read;
+            let mut s = String::new();
+            std::fs::File::open("/home/g/Desktop/pickitup/static/run.py").unwrap().read_to_string(&mut s);
+            s
+        };
+        ret.load_code(&source)?;
         Ok(ret)
     }
 
@@ -147,7 +150,7 @@ impl State for PickItUp {
                 PyFuncArgs::new(vec![Rc::clone(state), evt], vec![]),
             ) {
                 Err(py_err) => {
-                    handle_err(&mut self.vm, py_err);
+                    handle_err(&mut self.vm, py_err)?;
                 }
                 Ok(_) => {}
             }
@@ -157,7 +160,10 @@ impl State for PickItUp {
     }
 
     fn update(&mut self, window: &mut Window) -> Result<()> {
+        if !self.loaded {return Ok(())}
+
         self.update_window_ptr(window)?;
+
 
         if let Some(ref mut sprites) = &mut self.sprites {
             sprites.execute(|spr| {
@@ -166,13 +172,14 @@ impl State for PickItUp {
             })?;
         }
 
+
         if let (Some(update_fn), Some(state)) = (&self.update_fn, &self.state) {
             match self.vm.invoke(
                 Rc::clone(update_fn),
                 PyFuncArgs::new(vec![Rc::clone(state)], vec![]),
             ) {
                 Err(py_err) => {
-                    handle_err(&mut self.vm, py_err);
+                    handle_err(&mut self.vm, py_err)?;
                 }
                 Ok(_) => {}
             };
@@ -182,6 +189,8 @@ impl State for PickItUp {
 
     fn draw(&mut self, window: &mut Window) -> Result<()> {
         window.clear(Color::BLACK)?;
+        if !self.loaded {return Ok(())}
+
         if let (Some(draw_fn), Some(state)) = (&self.draw_fn, &self.state) {
             match self.vm.invoke(
                 Rc::clone(draw_fn),
@@ -247,7 +256,32 @@ fn to_pyobjref(vm: &mut VirtualMachine, event: &Event) -> PyObjectRef {
     }
     d
 }
-
 fn main() {
     run::<PickItUp>("set-cursor", Vector::new(800, 600), Settings::default());
 }
+
+
+// extern crate quicksilver;
+// #[macro_use]
+// extern crate rustpython_vm;
+// use quicksilver::{
+//     Result,
+//     geom::{Circle, Line, Rectangle, Transform, Triangle, Vector},
+//     graphics::{Background::Col, Color},
+//     lifecycle::{Settings, State, Window, run, },
+//     Error,
+// };
+// struct DrawGeometry;
+// impl State for DrawGeometry {
+//     fn new() -> Result<DrawGeometry> {
+//         Ok(DrawGeometry)
+//     }
+//     fn draw(&mut self, window: &mut Window) -> Result<()> {
+//         let mut vm = rustpython_vm::VirtualMachine::new();
+//         let s = vm.new_str("test".to_owned());
+//         return Err(Error::ContextError(format!("{:#?}", s)))
+//     }
+// }
+// fn main() {
+//     run::<DrawGeometry>("Draw Geometry", Vector::new(800, 600), Settings::default());
+// }

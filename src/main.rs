@@ -1,11 +1,11 @@
-extern crate quicksilver;
 extern crate num_traits;
-#[macro_use]extern crate rustpython_vm;
+extern crate quicksilver;
+#[macro_use]
+extern crate rustpython_vm;
 mod prelude;
 mod qs;
 use crate::prelude::*;
 use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol};
-
 
 struct PickItUp {
     vm: VirtualMachine,
@@ -16,9 +16,9 @@ struct PickItUp {
     state: Option<PyObjectRef>,
 }
 
-
 fn handle_err(vm: &mut VirtualMachine, py_err: PyObjectRef) {
-    let res = vm.to_pystr(&py_err)
+    let res = vm
+        .to_pystr(&py_err)
         .unwrap_or_else(|_| "Error, and error getting error message".into());
     panic!(res);
 }
@@ -29,23 +29,25 @@ impl PickItUp {
             let mode = compile::Mode::Exec;
             let code =
                 compile::compile(&source, &mode, "<qs>".to_string(), self.vm.ctx.code_type())
-                    .map_err(|err| {
-                        format!("Error parsing Python code: {}", err)
-                    }).unwrap();
+                    .map_err(|err| format!("Error parsing Python code: {}", err))
+                    .unwrap();
 
             let builtin = self.vm.get_builtin_scope();
             let scope = self.vm.context().new_scope(Some(builtin));
             let result = self.vm.run_code_obj(code, scope.clone());
-            // match result {
-            //     Err(py_err) => {
-            //         handle_err(&mut self.vm, py_err);
-            //     }
-            //     Ok(res) => {
-            //     }
-            // };
+            match result {
+                Err(py_err) => {
+                    handle_err(&mut self.vm, py_err);
+                }
+                Ok(_res) => {}
+            };
 
             let init_fn = scope.get_item("init").unwrap();
-            self.state = Some(self.vm.invoke(Rc::clone(&init_fn), PyFuncArgs::new(vec![], vec![])).unwrap());
+            self.state = Some(
+                self.vm
+                    .invoke(Rc::clone(&init_fn), PyFuncArgs::new(vec![], vec![]))
+                    .unwrap(),
+            );
             self.init_fn = Some(init_fn);
             self.update_fn = Some(scope.get_item("update").unwrap());
             self.draw_fn = Some(scope.get_item("draw").unwrap());
@@ -56,17 +58,16 @@ impl PickItUp {
     }
 
     fn reload(&mut self) -> Result<()> {
-        self.source = Rc::new(RefCell::new(Asset::new(load_file("run.py").map(|v8| String::from_utf8(v8).unwrap()))));
+        self.source = Rc::new(RefCell::new(Asset::new(
+            load_file("run.py").map(|v8| String::from_utf8(v8).unwrap()),
+        )));
         self.load_code()
     }
 
-    fn setup_module(&mut self) -> Result<()>{
-        let mk_module = Box::new(move |ctx: &PyContext| -> PyObjectRef {
-            py_module!(ctx, MOD_NAME, {
-                "rect" => ctx.new_rustfunc(qs::rect),
-            })
-        });
-        self.vm.stdlib_inits.insert(MOD_NAME.to_string(), mk_module);
+    fn setup_module(&mut self) -> Result<()> {
+        self.vm
+            .stdlib_inits
+            .insert(MOD_NAME.to_string(), Box::new(qs::mk_module));
         Ok(())
     }
 
@@ -82,7 +83,9 @@ impl PickItUp {
 impl State for PickItUp {
     fn new() -> Result<Self> {
         let vm = VirtualMachine::new();
-        let source = Rc::new(RefCell::new(Asset::new(load_file("run.py").map(|v8| String::from_utf8(v8).unwrap()))));
+        let source = Rc::new(RefCell::new(Asset::new(
+            load_file("run.py").map(|v8| String::from_utf8(v8).unwrap()),
+        )));
         let mut ret = PickItUp {
             vm,
             source,
@@ -110,12 +113,14 @@ impl State for PickItUp {
     fn update(&mut self, window: &mut Window) -> Result<()> {
         self.update_window_ptr(window)?;
         if let (Some(update_fn), Some(state)) = (&self.update_fn, &self.state) {
-            match self.vm.invoke(Rc::clone(update_fn), PyFuncArgs::new(vec![Rc::clone(state)], vec![])){
+            match self.vm.invoke(
+                Rc::clone(update_fn),
+                PyFuncArgs::new(vec![Rc::clone(state)], vec![]),
+            ) {
                 Err(py_err) => {
                     handle_err(&mut self.vm, py_err);
                 }
-                Ok(_) => {
-                }
+                Ok(_) => {}
             };
         }
         Ok(())
@@ -124,18 +129,19 @@ impl State for PickItUp {
     fn draw(&mut self, window: &mut Window) -> Result<()> {
         window.clear(Color::BLACK)?;
         if let (Some(draw_fn), Some(state)) = (&self.draw_fn, &self.state) {
-            match self.vm.invoke(Rc::clone(draw_fn), PyFuncArgs::new(vec![Rc::clone(state)], vec![])) {
+            match self.vm.invoke(
+                Rc::clone(draw_fn),
+                PyFuncArgs::new(vec![Rc::clone(state)], vec![]),
+            ) {
                 Err(py_err) => {
                     handle_err(&mut self.vm, py_err);
                 }
-                Ok(_) => {
-                }
+                Ok(_) => {}
             }
         }
         Ok(())
     }
 }
-
 
 fn main() {
     run::<PickItUp>("set-cursor", Vector::new(800, 600), Settings::default());

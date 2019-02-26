@@ -1,36 +1,35 @@
-pub use std::rc::Rc;
 pub use std::cell::RefCell;
+pub use std::rc::Rc;
 
 pub use quicksilver::{
     geom::{Circle, Line, Rectangle, Transform, Triangle, Vector},
     graphics::{Background::Col, Color, Image},
-    lifecycle::{Settings, State, Window, run, Asset},
+    lifecycle::{run, Asset, Settings, State, Window},
 };
 
 pub use quicksilver::{
-    Result, Error,
-    combinators::{result, join_all},
-    Future,
-    load_file,
+    combinators::{join_all, result},
     geom::Shape,
-    graphics::{Background::Img, Font, FontStyle},
-    lifecycle::{Event},
-    input::{ButtonState, MouseButton, Key},
+    graphics::{Background::Img, Drawable, Font, FontStyle},
+    input::{ButtonState, Key, MouseButton},
+    lifecycle::Event,
+    load_file,
     sound::Sound,
+    Error, Future, Result,
 };
 
 pub use rustpython_vm::{
-    obj::objstr,
-    pyobject::{PyContext, PyFuncArgs, PyObjectRef, PyResult},
     compile,
-    VirtualMachine,
-    pyobject::PyObjectPayload,
-    stdlib::StdlibInitFunc,
+    obj::objstr,
     obj::{
-        objsequence::get_elements,
+        objfloat,
         objint::{self, PyInt},
-        objfloat::{self},
+        objsequence::get_elements,
     },
+    pyobject::PyObjectPayload,
+    pyobject::{PyContext, PyFuncArgs, PyObjectRef, PyResult},
+    stdlib::StdlibInitFunc,
+    VirtualMachine,
 };
 
 pub const MOD_NAME: &'static str = "qs";

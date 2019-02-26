@@ -1,11 +1,16 @@
 import qs
 
 def init():
-    return [1,]
+    return [[1, 1], [1, 1]]
 
 def update(state):
-    print(state)
-    state[0] += 1
+    state[0][0] += 1
+    state[0][1] += 1
+    state[1][0] += 1
+    state[1][1] += 1
 
 def draw(state):
-    qs.draw_rect()
+    color = [1.,1.,1.,1.]
+    transform = { "rotate": 45 }
+    z = 10
+    qs.rect(state, color, transform=transform, z=z)

@@ -63,7 +63,7 @@ impl PickItUp {
     fn setup_module(&mut self) -> Result<()>{
         let mk_module = Box::new(move |ctx: &PyContext| -> PyObjectRef {
             py_module!(ctx, MOD_NAME, {
-                "draw_rect" => ctx.new_rustfunc(qs::draw_rect),
+                "rect" => ctx.new_rustfunc(qs::rect),
             })
         });
         self.vm.stdlib_inits.insert(MOD_NAME.to_string(), mk_module);

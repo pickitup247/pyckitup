@@ -26,6 +26,11 @@ pub use rustpython_vm::{
     VirtualMachine,
     pyobject::PyObjectPayload,
     stdlib::StdlibInitFunc,
+    obj::{
+        objsequence::get_elements,
+        objint::{self, PyInt},
+        objfloat::{self},
+    },
 };
 
 pub const MOD_NAME: &'static str = "qs";

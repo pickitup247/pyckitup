@@ -5,21 +5,15 @@ use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol, FromPyObjectRef, 
 macro_rules! decl_shape_fn {
     ($fn_name: tt, $shape_fn: expr) => {
         fn $fn_name(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
-            arg_check!(
-                vm,
-                args,
-                required = [(loc, None), (color, None)],
-                optional = [(transform, Some(vm.ctx.list_type())), (z, Some(vm.ctx.int_type()))]
-            );
-
-            dbg!(&loc);
+            arg_check!( vm, args, required = [(loc, None), (color, None)]);
+            let transform = args.kwargs.get("transform");
+            let z = args.kwargs.get("z");
             let coord = $shape_fn(loc);
             let color = get_color_arg(color);
             let transform = transform
                 .map(|t| get_tranform_arg(t))
                 .unwrap_or(Transform::IDENTITY);
             let z = z.map(|z|to_i32(z)).unwrap_or(0);
-            dbg!((coord, color, transform, z));
             let window = window_mut(vm);
             window.draw_ex(&coord, Col(color), transform, z);
             Ok(vm.get_none())
@@ -85,19 +79,12 @@ fn init_sounds(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
 }
 
 fn sound(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
-    arg_check!(
-        vm,
-        args,
-        required = [
-            (name, Some(vm.ctx.str_type()))
-        ],
-        optional = [(transform, None), (z, None)]
-    );
+    arg_check!( vm, args, required = [ (name, Some(vm.ctx.str_type())) ]);
 
     let name = objstr::get_value(name);
-    let (window, sprites) = window_sprites_mut(vm);
+    let sprites = sprites_mut(vm);
     sprites.execute(|sprites| {
-        let im = sprites.get_sound(&name).unwrap().play();
+        sprites.get_sound(&name).unwrap().play();
         Ok(())
     }).unwrap();
     Ok(vm.get_none())
@@ -113,6 +100,8 @@ fn sprite(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
         ],
         optional = [(transform, None), (z, None)]
     );
+    let transform = args.kwargs.get("transform");
+    let z = args.kwargs.get("z");
 
     let name = objstr::get_value(name);
     let coord = get_rect_arg(loc);
@@ -327,7 +316,7 @@ fn to_usize(p: &PyObjectRef) -> usize {
 }
 
 fn to_f32(p: &PyObjectRef) -> f32 {
-    match &p.borrow().payload {
+    match &p.payload {
         PyObjectPayload::Integer { value } => value.to_i32().unwrap() as f32,
         PyObjectPayload::Float { value } => *value as f32,
         f => panic!("TODO {:#?}", f),
@@ -335,7 +324,7 @@ fn to_f32(p: &PyObjectRef) -> f32 {
 }
 
 fn to_f64(p: &PyObjectRef) -> f64 {
-    match &p.borrow().payload {
+    match &p.payload {
         PyObjectPayload::Integer { value } => value.to_i32().unwrap() as f64,
         PyObjectPayload::Float { value } => *value as f64,
         f => panic!("TODO {:#?}", f),

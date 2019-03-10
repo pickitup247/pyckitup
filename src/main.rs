@@ -34,10 +34,10 @@ fn handle_err(vm: &mut VirtualMachine, py_err: PyObjectRef) -> Result<()> {
 }
 
 impl PickItUp {
-    fn load_code(&mut self, mut source: &str) -> Result<()> {
+    fn load_code(&mut self, source: &str, code_path: String) -> Result<()> {
         let mode = compile::Mode::Exec;
         let code =
-            compile::compile(&source, &mode, "<qs>".to_string(), self.vm.ctx.code_type())
+            compile::compile(&source, &mode, code_path, self.vm.ctx.code_type())
                 .map_err(|err| Error::ContextError(format!("Error parsing Python code: {}", err)))?;
 
         let builtin = self.vm.get_builtin_scope();
@@ -116,8 +116,11 @@ impl State for PickItUp {
             loaded: false,
         };
         ret.setup_module()?;
-        let source = if cfg!(target_arch = "wasm32") {
-            String::from_utf8(load_raw("test", "run.py")?).unwrap()
+        let (source, code_path) = if cfg!(target_arch = "wasm32") {
+            (
+                String::from_utf8(load_raw("test", "run.py")?).unwrap(),
+                "<qs>".to_owned(),
+            )
         } else {
             use std::io::Read;
             let dir = {
@@ -130,14 +133,15 @@ impl State for PickItUp {
             };
 
             unsafe {
-                dbg!(dir.clone() + "/" + FNAME.as_ref().unwrap());
+                let code_path = dir.clone() + "/" + FNAME.as_ref().unwrap();
+                dbg!(&code_path);
                 let mut s = String::new();
-                std::fs::File::open(dir+"/"+FNAME.as_ref().unwrap()).unwrap().read_to_string(&mut s).unwrap();
-                s
+                std::fs::File::open(&code_path).unwrap().read_to_string(&mut s).unwrap();
+                (s, code_path.to_owned())
             }
 
         };
-        ret.load_code(&source)?;
+        ret.load_code(&source, code_path)?;
         Ok(ret)
     }
 

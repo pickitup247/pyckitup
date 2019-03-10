@@ -1,8 +1,8 @@
 extern crate num_traits;
 extern crate quicksilver;
 extern crate clap;
-#[macro_use]
-extern crate rustpython_vm;
+#[macro_use] extern crate lazy_static;
+#[macro_use] extern crate rustpython_vm;
 use clap::{Arg, App, SubCommand};
 mod prelude;
 mod qs;
@@ -11,6 +11,8 @@ mod anim;
 
 use crate::prelude::*;
 use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol};
+
+static mut FNAME: Option<String> = None;
 
 struct PickItUp {
     vm: VirtualMachine,
@@ -46,7 +48,6 @@ impl PickItUp {
                 handle_err(&mut self.vm, py_err)?;
             }
             Ok(_res) => {
-
             }
         };
 
@@ -75,13 +76,6 @@ impl PickItUp {
 
         Ok(())
     }
-
-    // fn reload(&mut self) -> Result<()> {
-    //     self.source = Asset::new(
-    //         load_file("run.py").map(|v8| String::from_utf8(v8).unwrap()),
-    //     );
-    //     self.load_code()
-    // }
 
     fn setup_module(&mut self) -> Result<()> {
         self.vm
@@ -114,7 +108,6 @@ impl State for PickItUp {
         let mut ret = PickItUp {
             vm,
             sprites,
-
             update_fn: None,
             draw_fn: None,
             event_fn: None,
@@ -123,12 +116,10 @@ impl State for PickItUp {
             loaded: false,
         };
         ret.setup_module()?;
-        // save_raw("test", "run.py", "import qs\n".as_bytes())?;
         let source = if cfg!(target_arch = "wasm32") {
             String::from_utf8(load_raw("test", "run.py")?).unwrap()
         } else {
             use std::io::Read;
-            let mut s = String::new();
             let dir = {
                 let dir = std::env::current_dir().unwrap();
                 if dir.ends_with("static") {
@@ -138,10 +129,13 @@ impl State for PickItUp {
                 }
             };
 
-            dbg!(dir.clone()+"/run.py");
+            unsafe {
+                dbg!(dir.clone() + "/" + FNAME.as_ref().unwrap());
+                let mut s = String::new();
+                std::fs::File::open(dir+"/"+FNAME.as_ref().unwrap()).unwrap().read_to_string(&mut s).unwrap();
+                s
+            }
 
-            std::fs::File::open(dir+"/run.py").unwrap().read_to_string(&mut s).unwrap();
-            s
         };
         ret.load_code(&source)?;
         Ok(ret)
@@ -279,11 +273,23 @@ fn main() {
                             .value_name("SIZE")
                             .help("size, WxH, defaults to 480x270")
                             .takes_value(true))
+                        .arg(Arg::with_name("filename")
+                            .short("f")
+                            .long("filename")
+                            .value_name("FNAME")
+                            .help("filename, defaults to run.py")
+                            .takes_value(true))
                         .get_matches();
+
     let (w, h) = {
         let size = matches.value_of("size").unwrap_or("480x270");
         let ret: Vec<i32> = size.split("x").map(|i| i.parse().unwrap()).collect();
         (ret[0], ret[1])
+    };
+
+    {
+        let fname = matches.value_of("filename").unwrap_or("run.py");
+        unsafe { FNAME = Some(fname.to_owned()); }
     };
 
     run::<PickItUp>("pickitup", Vector::new(w, h), Settings::default());

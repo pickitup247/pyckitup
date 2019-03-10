@@ -2,29 +2,69 @@ use crate::prelude::*;
 use num_traits::ToPrimitive;
 use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol, FromPyObjectRef, TypeProtocol};
 
-macro_rules! decl_shape_fn {
-    ($fn_name: tt, $shape_fn: expr) => {
-        fn $fn_name(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
-            arg_check!( vm, args, required = [(loc, None), (color, None)]);
-            let transform = args.kwargs.get("transform");
-            let z = args.kwargs.get("z");
-            let coord = $shape_fn(loc);
-            let color = get_color_arg(color);
-            let transform = transform
-                .map(|t| get_tranform_arg(t))
-                .unwrap_or(Transform::IDENTITY);
-            let z = z.map(|z|to_i32(z)).unwrap_or(0);
-            let window = window_mut(vm);
-            window.draw_ex(&coord, Col(color), transform, z);
-            Ok(vm.get_none())
-        }
-    };
+fn rect(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!( vm, args, required = [(loc, None)]);
+
+    let transform = args.kwargs.get("transform").map(|t| get_tranform_arg(t)).unwrap_or(Transform::IDENTITY);
+    let z = args.kwargs.get("z").map(|z|to_i32(z)).unwrap_or(0);
+    let color = args.kwargs.get("color").map(get_color_arg).unwrap_or(Color::RED);
+
+    let coord = get_rect_arg(loc);
+    let window = window_mut(vm);
+    window.draw_ex(&coord, Col(color), transform, z);
+    Ok(vm.get_none())
 }
 
-decl_shape_fn!(rect, get_rect_arg);
-decl_shape_fn!(circ, get_circ_arg);
-decl_shape_fn!(triangle, get_triangle_arg);
-decl_shape_fn!(line, get_line_arg);
+fn circ(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!( vm, args, required = [(loc, None), (radius, None)]);
+
+    let transform = args.kwargs.get("transform").map(|t| get_tranform_arg(t)).unwrap_or(Transform::IDENTITY);
+    let z = args.kwargs.get("z").map(|z|to_i32(z)).unwrap_or(0);
+    let color = args.kwargs.get("color").map(get_color_arg).unwrap_or(Color::RED);
+
+    let p0 = get_elements(loc);
+    let r = radius;
+    let (p0x, p0y) = (to_f32(p0.get(0).unwrap()), to_f32(p0.get(1).unwrap()));
+    let r = to_f32(r);
+    let circle = Circle::new((p0x, p0y), r);
+    let window = window_mut(vm);
+    window.draw_ex(&circle, Col(color), transform, z);
+    Ok(vm.get_none())
+}
+
+fn triangle(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!( vm, args, required = [(loc, None)]);
+
+    let transform = args.kwargs.get("transform").map(|t| get_tranform_arg(t)).unwrap_or(Transform::IDENTITY);
+    let z = args.kwargs.get("z").map(|z|to_i32(z)).unwrap_or(0);
+    let color = args.kwargs.get("color").map(get_color_arg).unwrap_or(Color::RED);
+
+    let tri = get_triangle_arg(loc);
+    let window = window_mut(vm);
+    window.draw_ex(&tri, Col(color), transform, z);
+    Ok(vm.get_none())
+}
+
+fn line(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!( vm, args, required = [(loc, None)]);
+    let transform = args.kwargs.get("transform").map(|t| get_tranform_arg(t)).unwrap_or(Transform::IDENTITY);
+    let z = args.kwargs.get("z").map(|z|to_i32(z)).unwrap_or(0);
+    let color = args.kwargs.get("color").map(get_color_arg).unwrap_or(Color::RED);
+    let thickness = args.kwargs.get("thickness").map(to_f32).unwrap_or(1.);
+
+    let rect_loc = get_elements(loc);
+    let (p0, p1) = (
+        get_elements(rect_loc.get(0).unwrap()),
+        get_elements(rect_loc.get(1).unwrap())
+    );
+    let (p0x, p0y) = (to_f32(p0.get(0).unwrap()), to_f32(p0.get(1).unwrap()));
+    let (p1x, p1y) = (to_f32(p1.get(0).unwrap()), to_f32(p1.get(1).unwrap()));
+    let line = Line::new((p0x, p0y), (p1x, p1y)).with_thickness(thickness);
+
+    let window = window_mut(vm);
+    window.draw_ex(&line, Col(color), transform, z);
+    Ok(vm.get_none())
+}
 
 fn init_images(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     arg_check!(
@@ -157,6 +197,15 @@ fn mouse_pos(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     Ok(d)
 }
 
+fn window_clear(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!(vm, args, required=[(color, None)]);
+
+    let color = get_color_arg(color);
+    let window  = window_mut(vm);
+    window.clear(color);
+    Ok(vm.get_none())
+}
+
 fn mouse_wheel_delta(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     arg_check!(vm, args);
     let window  = window_mut(vm);
@@ -209,18 +258,6 @@ fn get_tranform_arg(t: &PyObjectRef) -> Transform {
     ])
 }
 
-/// [[x1, y1], [x2, y2], [x3, y3]]
-fn get_line_arg(loc: &PyObjectRef) -> Line {
-    let rect_loc = get_elements(loc);
-    let (p0, p1, t) = (
-        get_elements(rect_loc.get(0).unwrap()),
-        get_elements(rect_loc.get(1).unwrap()),
-        rect_loc.get(2).map(|t|to_f32(t)).unwrap_or(1.),
-    );
-    let (p0x, p0y) = (to_f32(p0.get(0).unwrap()), to_f32(p0.get(1).unwrap()));
-    let (p1x, p1y) = (to_f32(p1.get(0).unwrap()), to_f32(p1.get(1).unwrap()));
-    Line::new((p0x, p0y), (p1x, p1y)).with_thickness(t)
-}
 
 /// [[x1, y1], [x2, y2], [x3, y3]]
 fn get_triangle_arg(loc: &PyObjectRef) -> Triangle {
@@ -248,17 +285,6 @@ fn get_rect_arg(loc: &PyObjectRef) -> Rectangle {
     Rectangle::new((p0x, p0y), (p1x, p1y))
 }
 
-/// [[x1, y1], r]
-fn get_circ_arg(loc: &PyObjectRef) -> Circle {
-    let rect_loc = get_elements(loc);
-    let (p0, r) = (
-        get_elements(rect_loc.get(0).unwrap()),
-        rect_loc.get(1).unwrap(),
-    );
-    let (p0x, p0y) = (to_f32(p0.get(0).unwrap()), to_f32(p0.get(1).unwrap()));
-    let r = to_f32(r);
-    Circle::new((p0x, p0y), r)
-}
 
 fn sprites_mut(vm: &mut VirtualMachine) -> &mut Asset<Sprites> {
     let modules = vm.sys_module.get_attr("modules").unwrap();
@@ -342,6 +368,8 @@ pub fn mk_module(ctx: &PyContext) -> PyObjectRef {
         "sprite" => ctx.new_rustfunc(sprite),
         "anim" => ctx.new_rustfunc(anim),
         "sound" => ctx.new_rustfunc(sound),
+
+        "clear" => ctx.new_rustfunc(window_clear),
 
         "init_images" => ctx.new_rustfunc(init_images),
         "init_anims" => ctx.new_rustfunc(init_anims),

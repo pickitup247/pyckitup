@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 rustpython_vm = { path = "../RustPython/vm", version = "*" }
+clap = "*"
 num-traits = "0.2"
 
 [dependencies.quicksilver]

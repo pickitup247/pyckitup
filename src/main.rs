@@ -1,7 +1,9 @@
 extern crate num_traits;
 extern crate quicksilver;
+extern crate clap;
 #[macro_use]
 extern crate rustpython_vm;
+use clap::{Arg, App, SubCommand};
 mod prelude;
 mod qs;
 mod sprites;
@@ -127,7 +129,18 @@ impl State for PickItUp {
         } else {
             use std::io::Read;
             let mut s = String::new();
-            std::fs::File::open("/home/g/Desktop/pickitup/static/run.py").unwrap().read_to_string(&mut s);
+            let dir = {
+                let dir = std::env::current_dir().unwrap();
+                if dir.ends_with("static") {
+                    "..".to_owned()
+                } else {
+                    dir.as_os_str().to_str().unwrap().to_owned()
+                }
+            };
+
+            dbg!(dir.clone()+"/run.py");
+
+            std::fs::File::open(dir+"/run.py").unwrap().read_to_string(&mut s).unwrap();
             s
         };
         ret.load_code(&source)?;
@@ -228,7 +241,7 @@ fn to_pyobjref(vm: &mut VirtualMachine, event: &Event) -> PyObjectRef {
             set_str!(d, state, format!("{:?}", state));
         },
         Event::Typed(c) => {
-            set!(d, event, key);
+            set!(d, event, typed);
             set_str!(d, char, format!("{:?}", c));
         },
         Event::MouseMoved(v) => {
@@ -256,32 +269,22 @@ fn to_pyobjref(vm: &mut VirtualMachine, event: &Event) -> PyObjectRef {
     }
     d
 }
+
 fn main() {
-    run::<PickItUp>("set-cursor", Vector::new(800, 600), Settings::default());
+    let matches = App::new("pickitup")
+                        .version("0.1")
+                        .arg(Arg::with_name("size")
+                            .short("s")
+                            .long("size")
+                            .value_name("SIZE")
+                            .help("size, WxH, defaults to 480x270")
+                            .takes_value(true))
+                        .get_matches();
+    let (w, h) = {
+        let size = matches.value_of("size").unwrap_or("480x270");
+        let ret: Vec<i32> = size.split("x").map(|i| i.parse().unwrap()).collect();
+        (ret[0], ret[1])
+    };
+
+    run::<PickItUp>("pickitup", Vector::new(w, h), Settings::default());
 }
-
-
-// extern crate quicksilver;
-// #[macro_use]
-// extern crate rustpython_vm;
-// use quicksilver::{
-//     Result,
-//     geom::{Circle, Line, Rectangle, Transform, Triangle, Vector},
-//     graphics::{Background::Col, Color},
-//     lifecycle::{Settings, State, Window, run, },
-//     Error,
-// };
-// struct DrawGeometry;
-// impl State for DrawGeometry {
-//     fn new() -> Result<DrawGeometry> {
-//         Ok(DrawGeometry)
-//     }
-//     fn draw(&mut self, window: &mut Window) -> Result<()> {
-//         let mut vm = rustpython_vm::VirtualMachine::new();
-//         let s = vm.new_str("test".to_owned());
-//         return Err(Error::ContextError(format!("{:#?}", s)))
-//     }
-// }
-// fn main() {
-//     run::<DrawGeometry>("Draw Geometry", Vector::new(800, 600), Settings::default());
-// }

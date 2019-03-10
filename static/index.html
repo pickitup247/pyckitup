@@ -87,11 +87,11 @@ def draw(state):
     # qs.circ( [p0, 30.], red)
     # qs.triangle( [ p0, p1, state["p2"], ], green)
     # qs.sprite("crab", [p0, p1], z=1)
-    qs.anim("crab-left", [p0, p1], z=1)
+    # qs.anim("crab-left", [p0, p1], z=1)
 
     transform = rotate(state["deg"])
-    qs.rect( [p0, p1], blue, transform=transform, z=0)
-    #qs.anim("crab-up", [p0, p1], transform=transform, z=1)
+    # qs.rect( [p0, p1], blue, transform=transform, z=0)
+    qs.anim("crab-up", [p0, p1], transform=transform)
 
 
 def event(state, event):

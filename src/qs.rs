@@ -9,7 +9,7 @@ macro_rules! decl_shape_fn {
                 vm,
                 args,
                 required = [(loc, None), (color, None)],
-                optional = [(transform, Some(vm.ctx.list_type())), (z, Some(vm.ctx.int_type()))]
+                optional = [ (transform, Some(vm.ctx.list_type())), (z, Some(vm.ctx.int_type())) ]
             );
 
             dbg!(&loc);

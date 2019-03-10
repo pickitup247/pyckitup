@@ -122,7 +122,7 @@ impl State for PickItUp {
         };
         ret.setup_module()?;
         // save_raw("test", "run.py", "import qs\n".as_bytes())?;
-        let source = if cfg!(wasm32) {
+        let source = if cfg!(target_arch = "wasm32") {
             String::from_utf8(load_raw("test", "run.py")?).unwrap()
         } else {
             use std::io::Read;
@@ -197,7 +197,7 @@ impl State for PickItUp {
                 PyFuncArgs::new(vec![Rc::clone(state)], vec![]),
             ) {
                 Err(py_err) => {
-                    handle_err(&mut self.vm, py_err);
+                    handle_err(&mut self.vm, py_err)?;
                 }
                 Ok(_) => {}
             }

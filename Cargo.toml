@@ -3,6 +3,7 @@ name = "pyckitup"
 version = "0.1.0"
 authors = ["Ricky Han <rickylqhan@gmail.com>"]
 edition = "2018"
+license = "MIT"
 
 [dependencies]
 rustpython_vm = { path = "../RustPython/vm", version = "*" }
@@ -17,3 +18,4 @@ walkdir = "2"
 version = "0.3.7"
 default-features = false
 features = ["fonts", "sounds", "saving"]
+

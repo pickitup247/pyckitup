@@ -1,13 +1,12 @@
 extern crate num_traits;
 extern crate quicksilver;
-#[cfg(not(target_arch = "wasm32"))]
-extern crate clap;
-#[cfg(not(target_arch = "wasm32"))]
-extern crate fs_extra;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate rustpython_vm;
-#[cfg(not(target_arch = "wasm32"))]
-use clap::{Arg, App, SubCommand};
+#[cfg(not(target_arch = "wasm32"))] extern crate clap;
+#[cfg(not(target_arch = "wasm32"))] extern crate fs_extra;
+#[cfg(not(target_arch = "wasm32"))] extern crate walkdir;
+#[cfg(not(target_arch = "wasm32"))] use clap::{Arg, App, SubCommand};
+#[cfg(not(target_arch = "wasm32"))] use walkdir::{WalkDir, DirEntry};
 mod prelude;
 mod qs;
 mod sprites;
@@ -16,8 +15,6 @@ mod anim;
 use crate::prelude::*;
 use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol};
 use std::path::Path;
-
-static mut FNAME: Option<String> = None;
 
 struct PickItUp {
     vm: VirtualMachine,
@@ -144,16 +141,14 @@ impl State for PickItUp {
                 }
             };
 
-            unsafe {
-                let code_path = dir.clone() + "/" + FNAME.as_ref().unwrap();
-                let mut s = String::new();
-                let f = std::fs::File::open(&code_path);
-                match f {
-                    Err(_) => panic!(format!("File `{}` is not found.", FNAME.as_ref().unwrap())),
-                    Ok(mut f) => {
-                        f.read_to_string(&mut s).unwrap();
-                        (s, code_path.to_owned())
-                    }
+            let code_path = dir.clone() + "/" + "run.py";
+            let mut s = String::new();
+            let f = std::fs::File::open(&code_path);
+            match f {
+                Err(_) => panic!("File `run.py` is not found."),
+                Ok(mut f) => {
+                    f.read_to_string(&mut s).unwrap();
+                    (s, code_path.to_owned())
                 }
             }
 
@@ -309,10 +304,6 @@ fn main() {
                             .value_name("SIZE")
                             .help("size, WxH, defaults to 480x270")
                             .takes_value(true))
-                        .arg(Arg::with_name("filename")
-                            .value_name("FNAME")
-                            .help("filename, defaults to run.py")
-                            .takes_value(true))
                         .subcommand(SubCommand::with_name("init")
                             .about("initialize a new pyckitup project")
                             .arg(
@@ -341,14 +332,57 @@ fn main() {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn pyckitup_wasm() {
+    if !Path::new("./run.py").exists() {
+        println!("Path ./run.py doesn't exist. Doing nothing.");
+        std::process::exit(1);
+    }
     let mut options = fs_extra::dir::CopyOptions::new();
     options.copy_inside = true;
     options.overwrite = true;
     fs_extra::dir::copy("./static", "./build", &options);
     std::fs::write("./build/pyckitup.js", include_bytes!("../target/deploy/pyckitup.js").to_vec());
     std::fs::write("./build/pyckitup.wasm", include_bytes!("../target/deploy/pyckitup.wasm").to_vec());
-    std::fs::write("./build/index.html", include_bytes!("../target/deploy/index.html").to_vec());
-    std::fs::write("./build/server.py", include_bytes!("../server.py").to_vec());
+
+    let template = include_str!("../static/template.html");
+    let rendered = render(template);
+    std::fs::write("./build/index.html", rendered);
+}
+
+
+fn is_py(entry: &DirEntry) -> bool {
+    entry.file_name()
+        .to_str()
+        .map(|s| s.ends_with(".py"))
+        .unwrap_or(false)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn render(template: &str) -> String {
+    let code = "";
+    for entry in WalkDir::new(".").into_iter().filter_map(|e| e.ok()) {
+        if is_py(&entry)
+        && !entry.path().starts_with("./build")
+        && !entry.path().starts_with("./static")
+        {
+            dbg!(&entry);
+        }
+    }
+
+    // let run = `import qs
+    // import test
+    // BLUE = [0,0,1,1]
+    // def init():
+    //     pass
+    // def draw(_):
+    //     qs.rect([[100,100], [32,32]], color=BLUE)
+    // print(1)
+    // `;
+    //     window.localStorage.setItem("run.py", btoa(run))
+    //     let test = `a = 1
+    // `;
+    //  window.localStorage.setItem("test.py", btoa(test))
+
+    template.to_owned().replace("INSERTCODEHERE", code)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -375,9 +409,6 @@ fn pyckitup_run(matches: &clap::ArgMatches) {
         let ret: Vec<i32> = size.split("x").map(|i| i.parse().unwrap()).collect();
         (ret[0], ret[1])
     };
-
-    let fname = matches.value_of("filename").unwrap_or("run.py");
-    unsafe { FNAME = Some(fname.to_owned()); }
 
     run::<PickItUp>("pickitup", Vector::new(w, h), Settings::default());
 }

@@ -1464,6 +1464,7 @@ dependencies = [
  "num-traits 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "quicksilver 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustpython_vm 0.1.0",
+ "walkdir 2.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

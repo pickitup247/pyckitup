@@ -333,7 +333,7 @@ fn main() {
 #[cfg(not(target_arch = "wasm32"))]
 fn pyckitup_wasm() {
     if !Path::new("./run.py").exists() {
-        println!("Path ./run.py doesn't exist. Doing nothing.");
+        println!("File `./run.py` doesn't exist. Doing nothing.");
         std::process::exit(1);
     }
     let mut options = fs_extra::dir::CopyOptions::new();
@@ -342,8 +342,9 @@ fn pyckitup_wasm() {
     fs_extra::dir::copy("./static", "./build", &options);
     std::fs::write("./build/pyckitup.js", include_bytes!("../target/deploy/pyckitup.js").to_vec());
     std::fs::write("./build/pyckitup.wasm", include_bytes!("../target/deploy/pyckitup.wasm").to_vec());
+    std::fs::write("./build/server.py", include_bytes!("../include/server.py").to_vec());
 
-    let template = include_str!("../static/template.html");
+    let template = include_str!("../include/template.html");
     let rendered = render(template);
     std::fs::write("./build/index.html", rendered);
 }
@@ -365,7 +366,7 @@ fn read_file(path: &PathBuf) -> String {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn render(template: &str) -> String {
+fn render(tmpl: &str) -> String {
     let mut files = vec![];
     for entry in WalkDir::new(".").into_iter().filter_map(|e| e.ok()) {
         if is_py(&entry)
@@ -379,31 +380,16 @@ fn render(template: &str) -> String {
 
     let mut code = String::new();
 
-    code.push_str("console.log('Begin loading Python files...')");
-    code.push_str("window.localStorage.clear()");
+    code.push_str("console.log('Begin loading Python files...');\n");
+    code.push_str("window.localStorage.clear();\n");
     for (i, (content, path)) in files.into_iter().map(|i|(read_file(&i), i)).enumerate() {
         let var_name = format!("file_{}", i);
         code.push_str(&format!("let {} = `{}`;\n", var_name, content));
         let path_stripped = path.as_path().strip_prefix("./").unwrap().to_str().unwrap();
         code.push_str(&format!("window.localStorage.setItem(\"{}\", btoa({}));\n", path_stripped, var_name));
     }
-    code.push_str("console.log('Finished loading Python.')");
-
-    // let run = `import qs
-    // import test
-    // BLUE = [0,0,1,1]
-    // def init():
-    //     pass
-    // def draw(_):
-    //     qs.rect([[100,100], [32,32]], color=BLUE)
-    // print(1)
-    // `;
-    //     window.localStorage.setItem("run.py", btoa(run))
-    //     let test = `a = 1
-    // `;
-    //  window.localStorage.setItem("test.py", btoa(test))
-
-    template.to_owned().replace("INSERTCODEHERE", &code)
+    code.push_str("console.log('Finished loading Python.');\n");
+    tmpl.to_owned().replace("INSERTCODEHERE", &code)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -417,7 +403,7 @@ fn pyckitup_init(matches: &clap::ArgMatches) {
     println!("Initializing pyckitup project in directory `./{}`", project_name);
     std::fs::create_dir(&format!("./{}/", project_name));
     std::fs::create_dir(&format!("./{}/static/", project_name));
-    std::fs::write(&format!("./{}/static/click.wav", project_name), include_bytes!("../static/click.wav").to_vec());
+    std::fs::write(&format!("./{}/static/click.wav", project_name), include_bytes!("../include/click.wav").to_vec());
     std::fs::write(&format!("./{}/run.py", project_name), include_bytes!("../examples/clock.py").to_vec());
     std::fs::write(&format!("./{}/common.py", project_name), include_bytes!("../examples/common.py").to_vec());
     println!("Initialized. To run: `pyckitup`");
@@ -425,6 +411,11 @@ fn pyckitup_init(matches: &clap::ArgMatches) {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn pyckitup_run(matches: &clap::ArgMatches) {
+    if !Path::new("./run.py").exists() {
+        println!("File `./run.py` doesn't exist. Doing nothing.");
+        std::process::exit(1);
+    }
+
     let (w, h) = {
         let size = matches.value_of("size").unwrap_or("800x600");
         let ret: Vec<i32> = size.split("x").map(|i| i.parse().unwrap()).collect();

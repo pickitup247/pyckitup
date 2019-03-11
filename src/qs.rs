@@ -107,11 +107,10 @@ fn init_anims(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
         let anim_params = get_elements(anim);
         let name = objstr::get_value(anim_params.get(0).unwrap());
         let path = objstr::get_value(anim_params.get(1).unwrap());
-        let w = to_usize(anim_params.get(2).unwrap());
-        let h = to_usize(anim_params.get(3).unwrap());
-        let dur = to_f64(anim_params.get(4).unwrap());
+        let nframes = to_usize(anim_params.get(2).unwrap());
+        let dur = to_f64(anim_params.get(3).unwrap());
 
-        resources.1.push((name, path, (w, h, dur)));
+        resources.1.push((name, path, (nframes, dur)));
     }
     Ok(vm.get_none())
 }

@@ -12,6 +12,8 @@ mod qs;
 mod sprites;
 mod anim;
 
+static mut FNAME: Option<String> = None;
+
 use crate::prelude::*;
 use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol};
 use std::path::{Path, PathBuf};
@@ -126,7 +128,9 @@ impl State for PickItUp {
         ret.setup_module()?;
         let (source, code_path) = if cfg!(target_arch = "wasm32") {
             (
-                String::from_utf8(load_raw("test", "run.py")?).unwrap(),
+                String::from_utf8(
+                    load_raw("test", "run.py")?
+                ).unwrap(),
                 "<qs>".to_owned(),
             )
         } else {
@@ -141,17 +145,18 @@ impl State for PickItUp {
                 }
             };
 
-            let code_path = dir.clone() + "/" + "run.py";
-            let mut s = String::new();
-            let f = std::fs::File::open(&code_path);
-            match f {
-                Err(_) => panic!("File `run.py` is not found."),
-                Ok(mut f) => {
-                    f.read_to_string(&mut s).unwrap();
-                    (s, code_path.to_owned())
+            unsafe {
+                let code_path = dir.clone() + "/" + FNAME.as_ref().unwrap();
+                let mut s = String::new();
+                let f = std::fs::File::open(&code_path);
+                match f {
+                    Err(_) => panic!(format!("File `{}` is not found.", FNAME.as_ref().unwrap())),
+                    Ok(mut f) => {
+                        f.read_to_string(&mut s).unwrap();
+                        (s, code_path.to_owned())
+                    }
                 }
             }
-
         };
         ret.load_code(&source, code_path)?;
         Ok(ret)
@@ -304,6 +309,10 @@ fn main() {
                             .value_name("SIZE")
                             .help("size, WxH, defaults to 480x270")
                             .takes_value(true))
+                        .arg(Arg::with_name("filename")
+                            .value_name("FNAME")
+                            .help("filename, defaults to run.py")
+                            .takes_value(true))
                         .subcommand(SubCommand::with_name("init")
                             .about("initialize a new pyckitup project")
                             .arg(
@@ -332,6 +341,7 @@ fn main() {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn pyckitup_wasm() {
+    println!("Deploying to `./build`");
     if !Path::new("./run.py").exists() {
         println!("File `./run.py` doesn't exist. Doing nothing.");
         std::process::exit(1);
@@ -347,9 +357,10 @@ fn pyckitup_wasm() {
     let template = include_str!("../include/template.html");
     let rendered = render(template);
     std::fs::write("./build/index.html", rendered);
+    println!("Deployed!");
 }
 
-
+#[cfg(not(target_arch = "wasm32"))]
 fn is_py(entry: &DirEntry) -> bool {
     entry.file_name()
         .to_str()
@@ -357,6 +368,7 @@ fn is_py(entry: &DirEntry) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn read_file(path: &PathBuf) -> String {
     use std::io::Read;
     let mut f = std::fs::File::open(&path).unwrap();
@@ -406,12 +418,15 @@ fn pyckitup_init(matches: &clap::ArgMatches) {
     std::fs::write(&format!("./{}/static/click.wav", project_name), include_bytes!("../include/click.wav").to_vec());
     std::fs::write(&format!("./{}/run.py", project_name), include_bytes!("../examples/clock.py").to_vec());
     std::fs::write(&format!("./{}/common.py", project_name), include_bytes!("../examples/common.py").to_vec());
+    std::fs::write(&format!("./{}/.gitignore", project_name), include_bytes!("../include/gitignore").to_vec());
     println!("Initialized. To run: `pyckitup`");
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn pyckitup_run(matches: &clap::ArgMatches) {
-    if !Path::new("./run.py").exists() {
+    let fname = matches.value_of("filename").unwrap_or("run.py");
+
+    if !Path::new(fname).exists() {
         println!("File `./run.py` doesn't exist. Doing nothing.");
         std::process::exit(1);
     }
@@ -421,6 +436,9 @@ fn pyckitup_run(matches: &clap::ArgMatches) {
         let ret: Vec<i32> = size.split("x").map(|i| i.parse().unwrap()).collect();
         (ret[0], ret[1])
     };
+
+
+    unsafe { FNAME = Some(fname.to_owned()); }
 
     run::<PickItUp>("pickitup", Vector::new(w, h), Settings::default());
 }

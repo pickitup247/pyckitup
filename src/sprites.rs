@@ -28,8 +28,8 @@ impl Sprites {
         let fut_anim = join_all(anim_futs)
             .map(|vec| {
                 let mut anims = HashMap::new();
-                for (src, ((frame_w, frame_h, dur), img)) in vec.into_iter() {
-                    let anim = Animation::from_image(img, frame_w, frame_h, dur);
+                for (src, ((nframes, dur), img)) in vec.into_iter() {
+                    let anim = Animation::from_image(img, nframes, dur);
                     anims.insert(src.to_string(), anim);
                 }
                 anims

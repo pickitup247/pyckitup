@@ -47,13 +47,3 @@ def draw(state):
     qs.line([[400, 300], hour_pos], thickness=10, color=BLACK)
     qs.line([[400, 300], min_pos], thickness=5, color=BLUE)
     qs.line([[400, 300], second_pos], thickness=3, color=RED)
-
-
-# fn main() {
-#     run::<Stopwatch>("Stopwatch", Vector::new(800, 600), Settings {
-#         draw_rate: 1000. / 10., // 10 FPS are enough
-#         update_rate: 1000., // every second to make it appear like a clock
-#         vsync: false, // don't use VSync, we're limiting to 10 FPS on our own
-#         ..Settings::default()
-#     });
-# }

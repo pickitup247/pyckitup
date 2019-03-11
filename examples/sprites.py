@@ -6,8 +6,8 @@ def init():
         ["crab", "crab.png"],
     ])
     qs.init_anims([
-        ["crab-left", "crab-left.png", 36, 27, 1.],
-        ["crab-up", "crab-up.png", 36, 27, 1.]
+        ["crab-left", "crab-left.png", 2, 1.],
+        ["crab-up", "crab-up.png", 2, 1.]
     ])
     qs.init_sounds([
         ["click", "click.wav"]

@@ -56,18 +56,18 @@ impl PickItUp {
         let qs = modules.get_item(MOD_NAME).ok_or(Error::ContextError("no module called qs".to_owned()))?;
         qs.set_item(&self.vm.ctx, "resources", self.vm.new_int(resources_ptr));
 
-        let init_fn = scope.get_item("init").ok_or(Error::ContextError("no init function".to_owned()))?;
-        self.state = Some(
-            self.vm
+        self.state = Some(match scope.get_item("init") {
+            Some(init_fn) => self.vm
                 .invoke(Rc::clone(&init_fn), PyFuncArgs::new(vec![], vec![]))
                 .map_err(|_|Error::ContextError("cannot invoke init function".to_owned()))?,
-        );
+            None => self.vm.get_none(),
+        });
         // create sprites based on resources
         self.sprites = Some(Asset::new(Sprites::new(self.resources.clone())));
 
-        self.update_fn = Some(scope.get_item("update").ok_or(Error::ContextError("no update function".to_owned()))?);
-        self.draw_fn = Some(scope.get_item("draw").ok_or(Error::ContextError("no draw function".to_owned()))?);
-        self.event_fn = Some(scope.get_item("event").ok_or(Error::ContextError("no event function".to_owned()))?);
+        self.update_fn = scope.get_item("update");
+        self.draw_fn = scope.get_item("draw");
+        self.event_fn = scope.get_item("event");
 
         let sprites_ptr = (self.sprites.as_ref().unwrap() as *const Asset<Sprites>) as usize;
         qs.set_item(&self.vm.ctx, "sprites", self.vm.new_int(sprites_ptr));

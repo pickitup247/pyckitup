@@ -3,10 +3,19 @@ import qs
 from common import *
 
 def init():
-    pass
+    return [[0, 0], [800, 600]]
 
-def update(_state):
-    pass
+def update(state):
+    keys = qs.keyboard_bool()
+    if keys["Left"] or keys["A"]:
+        state[0][0] += 4
+    if keys["Right"] or keys["D"]:
+        state[0][0] -= 4
+    if keys["Up"] or keys["W"]:
+        state[0][1] += 4
+    if keys["Down"] or keys["S"]:
+        state[0][1] -= 4
+    qs.set_view(state)
 
 def draw(_state):
     # Remove any artifacts from the previous frame

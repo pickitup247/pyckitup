@@ -2,6 +2,20 @@ use crate::prelude::*;
 use num_traits::ToPrimitive;
 use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol, FromPyObjectRef, TypeProtocol};
 
+const KEY_LIST: &[Key] = &[Key::Key1, Key::Key2, Key::Key3, Key::Key4, Key::Key5, Key::Key6, Key::Key7, Key::Key8, Key::Key9, Key::Key0, Key::A, Key::B, Key::C, Key::D,
+    Key::E, Key::F, Key::G, Key::H, Key::I, Key::J, Key::K, Key::L, Key::M, Key::N, Key::O, Key::P, Key::Q, Key::R, Key::S, Key::T, Key::U, Key::V, Key::W, Key::X, Key::Y, Key::Z,
+    Key::Escape, Key::F1, Key::F2, Key::F3, Key::F4, Key::F5, Key::F6, Key::F7, Key::F8, Key::F9, Key::F10, Key::F11, Key::F12, Key::F13, Key::F14, Key::F15, Key::F16, Key::F17, Key::F18,
+    Key::F19, Key::F20, Key::F21, Key::F22, Key::F23, Key::F24, Key::Snapshot, Key::Scroll, Key::Pause, Key::Insert, Key::Home, Key::Delete, Key::End, Key::PageDown, Key::PageUp, Key::Left, Key::Up, Key::Right,
+    Key::Down, Key::Back, Key::Return, Key::Space, Key::Compose, Key::Caret, Key::Numlock, Key::Numpad0, Key::Numpad1, Key::Numpad2, Key::Numpad3, Key::Numpad4, Key::Numpad5,
+    Key::Numpad6, Key::Numpad7, Key::Numpad8, Key::Numpad9, Key::AbntC1, Key::AbntC2, Key::Add, Key::Apostrophe, Key::Apps, Key::At, Key::Ax, Key::Backslash, Key::Calculator,
+    Key::Capital, Key::Colon, Key::Comma, Key::Convert, Key::Decimal, Key::Divide, Key::Equals, Key::Grave, Key::Kana, Key::Kanji, Key::LAlt, Key::LBracket, Key::LControl,
+    Key::LShift, Key::LWin, Key::Mail, Key::MediaSelect, Key::MediaStop, Key::Minus, Key::Multiply, Key::Mute, Key::MyComputer, Key::NavigateForward,
+    Key::NavigateBackward, Key::NextTrack, Key::NoConvert, Key::NumpadComma, Key::NumpadEnter, Key::NumpadEquals, Key::OEM102, Key::Period, Key::PlayPause,
+    Key::Power, Key::PrevTrack, Key::RAlt, Key::RBracket, Key::RControl, Key::RShift, Key::RWin, Key::Semicolon, Key::Slash, Key::Sleep, Key::Stop, Key::Subtract,
+    Key::Sysrq, Key::Tab, Key::Underline, Key::Unlabeled, Key::VolumeDown, Key::VolumeUp, Key::Wake, Key::WebBack, Key::WebFavorites, Key::WebForward, Key::WebHome,
+    Key::WebRefresh, Key::WebSearch, Key::WebStop, Key::Yen
+];
+
 fn rect(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     arg_check!( vm, args, required = [(loc, None)]);
 
@@ -66,7 +80,7 @@ fn line(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     Ok(vm.get_none())
 }
 
-fn init_images(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+fn init_sprites(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     arg_check!(
         vm,
         args,
@@ -134,28 +148,40 @@ fn sprite(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     arg_check!(
         vm,
         args,
-        required = [
-            (name, Some(vm.ctx.str_type())),
-            (loc, None)
-        ],
+        required = [ (name, Some(vm.ctx.str_type())) ],
         optional = [(transform, None), (z, None)]
     );
-    let transform = args.kwargs.get("transform");
-    let z = args.kwargs.get("z");
+    let transform = args.kwargs.get("transform").map(|t| get_tranform_arg(t)).unwrap_or(Transform::IDENTITY);
+    let z = args.kwargs.get("z").map(|z|to_i32(z)).unwrap_or(0);
 
     let name = objstr::get_value(name);
-    let coord = get_rect_arg(loc);
-    let transform = transform
-        .map(|t| get_tranform_arg(t))
-        .unwrap_or(Transform::IDENTITY);
-    let z = to_i32(&z.unwrap_or(&Rc::clone(&vm.new_int(0))));
 
     let (window, sprites) = window_sprites_mut(vm);
-    sprites.execute(|sprites| {
-        let im = sprites.get_img(&name).unwrap();
-        window.draw_ex(&coord, Img(im), transform, z);
-        Ok(())
-    }).unwrap();
+    match (args.kwargs.get("rect"), args.kwargs.get("p0")) {
+        (Some(loc), None) => {
+            let coord = get_rect_arg(loc);
+
+            sprites.execute(|sprites| {
+                let im = sprites.get_img(&name).unwrap();
+                window.draw_ex(&coord, Img(im), transform, z);
+                Ok(())
+            }).unwrap();
+        }
+        (None, Some(p0)) => {
+            let (p0x, p0y) = get_point_arg(&get_elements(p0));
+            let pos = Vector::new(p0x, p0y);
+
+            sprites.execute(|sprites| {
+                let im = sprites.get_img(&name).unwrap();
+                let Rectangle {pos:_, size} = im.area();
+                window.draw_ex(&Rectangle{pos, size}, Img(im), transform, z);
+                Ok(())
+            }).unwrap();
+        }
+        (None, None) => panic!("sprite() must have either `p0=` or `rect=` named argument"),
+        (Some(_), Some(_)) => panic!("sprite() must have either `p0=` or `rect=` named argument, but not both"),
+    };
+
     Ok(vm.get_none())
 }
 
@@ -163,27 +189,40 @@ fn anim(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     arg_check!(
         vm,
         args,
-        required = [
-            (name, Some(vm.ctx.str_type())),
-            (loc, None)
-        ],
+        required = [(name, Some(vm.ctx.str_type()))],
         optional = [(transform, None), (z, None)]
     );
-
+    let transform = args.kwargs.get("transform").map(|t| get_tranform_arg(t)).unwrap_or(Transform::IDENTITY);
+    let z = args.kwargs.get("z").map(|z|to_i32(z)).unwrap_or(0);
     let name = objstr::get_value(name);
-    let coord = get_rect_arg(loc);
-    let transform = transform
-        .map(|t| get_tranform_arg(t))
-        .unwrap_or(Transform::IDENTITY);
-    let z = to_i32(&z.unwrap_or(&Rc::clone(&vm.new_int(0))));
 
     let (window, sprites) = window_sprites_mut(vm);
-    sprites.execute(|sprites| {
-        let im = sprites.get_anim(&name).expect(&format!("no animation called {}", name))
-            .current_frame();
-        window.draw_ex(&coord, Img(im), transform, z);
-        Ok(())
-    }).unwrap();
+    match (args.kwargs.get("rect"), args.kwargs.get("p0")) {
+        (Some(loc), None) => {
+            let coord = get_rect_arg(loc);
+            sprites.execute(|sprites| {
+                let im = sprites.get_anim(&name).expect(&format!("no animation called {}", name))
+                    .current_frame();
+                window.draw_ex(&coord, Img(im), transform, z);
+                Ok(())
+            }).unwrap();
+        }
+        (None, Some(p0)) => {
+            let (p0x, p0y) = get_point_arg(&get_elements(p0));
+            let pos = Vector::new(p0x, p0y);
+
+            sprites.execute(|sprites| {
+                let im = sprites.get_anim(&name).expect(&format!("no animation called {}", name))
+                    .current_frame();
+                let Rectangle {pos:_, size} = im.area();
+                window.draw_ex(&Rectangle{pos, size}, Img(im), transform, z);
+                Ok(())
+            }).unwrap();
+        }
+        (None, None) => panic!("anim() must have either `p0=` or `rect=` named argument"),
+        (Some(_), Some(_)) => panic!("anim() must have either `p0=` or `rect=` named argument, but not both"),
+    };
+
     Ok(vm.get_none())
 }
 
@@ -195,6 +234,52 @@ fn mouse_pos(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     d.set_item(&vm.ctx, "x", vm.new_int(x));
     d.set_item(&vm.ctx, "y", vm.new_int(y));
     Ok(d)
+}
+
+fn update_rate(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!(vm, args);
+    let window  = window_mut(vm);
+    let update_rate = window.update_rate();
+    Ok(vm.new_int(update_rate))
+}
+
+fn set_update_rate(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!(vm, args, required = [(rate, None)]);
+    let window = window_mut(vm);
+    window.set_update_rate(to_f32(rate) as f64);
+    Ok(vm.get_none())
+}
+
+fn keyboard(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!(vm, args);
+    let window  = window_mut(vm);
+    let keys = window.keyboard();
+    let d = vm.new_dict();
+    for key in KEY_LIST {
+        let val = vm.new_str(format!("{:?}", keys[*key]));
+        d.set_item(&vm.ctx, &format!("{:?}", key), val);
+    }
+    Ok(d)
+}
+
+fn keyboard_bool(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!(vm, args);
+    let window  = window_mut(vm);
+    let keys = window.keyboard();
+    let d = vm.new_dict();
+    for key in KEY_LIST {
+        let val = vm.new_bool(keys[*key].is_down());
+        d.set_item(&vm.ctx, &format!("{:?}", key), val);
+    }
+    Ok(d)
+}
+
+fn set_view(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    use quicksilver::graphics::View;
+    arg_check!( vm, args, required = [(loc, None)]);
+    let window  = window_mut(vm);
+    window.set_view(View::new(get_rect_arg(loc)));
+    Ok(vm.get_none())
 }
 
 fn window_clear(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
@@ -273,6 +358,10 @@ fn get_triangle_arg(loc: &PyObjectRef) -> Triangle {
     Triangle::new((p0x, p0y), (p1x, p1y), (p2x, p2y))
 }
 
+fn get_point_arg(p0: &Vec<PyObjectRef>) -> (f32, f32) {
+    (to_f32(p0.get(0).unwrap()), to_f32(p0.get(1).unwrap()))
+}
+
 /// [[x1, y1], [x2, y2]]
 fn get_rect_arg(loc: &PyObjectRef) -> Rectangle {
     let rect_loc = get_elements(loc);
@@ -280,21 +369,11 @@ fn get_rect_arg(loc: &PyObjectRef) -> Rectangle {
         get_elements(rect_loc.get(0).unwrap()),
         get_elements(rect_loc.get(1).unwrap()),
     );
-    let (p0x, p0y) = (to_f32(p0.get(0).unwrap()), to_f32(p0.get(1).unwrap()));
-    let (p1x, p1y) = (to_f32(p1.get(0).unwrap()), to_f32(p1.get(1).unwrap()));
+    let (p0x, p0y) = get_point_arg(&p0);
+    let (p1x, p1y) = get_point_arg(&p1);
     Rectangle::new((p0x, p0y), (p1x, p1y))
 }
 
-
-fn sprites_mut(vm: &mut VirtualMachine) -> &mut Asset<Sprites> {
-    let modules = vm.sys_module.get_attr("modules").unwrap();
-    let qs = modules.get_item(MOD_NAME).unwrap();
-    let ptr = qs.get_item("sprites").unwrap();
-    let ptr = rustpython_vm::obj::objint::get_value(&ptr)
-        .to_usize()
-        .unwrap();
-    unsafe { &mut *(ptr as *mut Asset<Sprites>) }
-}
 
 fn resources_mut(vm: &mut VirtualMachine) -> &mut Resources {
     let modules = vm.sys_module.get_attr("modules").unwrap();
@@ -306,7 +385,18 @@ fn resources_mut(vm: &mut VirtualMachine) -> &mut Resources {
     unsafe { &mut *(ptr as *mut Resources) }
 }
 
-fn window_sprites_mut(vm: &mut VirtualMachine) -> (&mut Window, &mut Asset<Sprites>) {
+fn sprites_mut<'a, 'b>(vm: &'a mut VirtualMachine) -> &'b mut Asset<Sprites> {
+    let modules = vm.sys_module.get_attr("modules").unwrap();
+    let qs = modules.get_item(MOD_NAME).unwrap();
+    let ptr = qs.get_item("sprites").unwrap();
+    let ptr = rustpython_vm::obj::objint::get_value(&ptr)
+        .to_usize()
+        .unwrap();
+    unsafe { &mut *(ptr as *mut Asset<Sprites>) }
+}
+
+
+fn window_sprites_mut<'a, 'b>(vm: &'a mut VirtualMachine) -> (&'b mut Window, &'b mut Asset<Sprites>) {
     let modules = vm.sys_module.get_attr("modules").unwrap();
     let qs = modules.get_item(MOD_NAME).unwrap();
     let ptr = qs.get_item("window").unwrap();
@@ -323,10 +413,10 @@ fn window_sprites_mut(vm: &mut VirtualMachine) -> (&mut Window, &mut Asset<Sprit
     )
 }
 
-fn window_mut(vm: &mut VirtualMachine) -> &mut Window {
+fn window_mut<'a, 'b>(vm: &'a mut VirtualMachine) -> &'b mut Window {
     let modules = vm.sys_module.get_attr("modules").unwrap();
-    let qs = modules.get_item(MOD_NAME).unwrap();
-    let ptr = qs.get_item("window").unwrap();
+    let qs = modules.get_item(MOD_NAME).expect("qs is not loaded");
+    let ptr = qs.get_item("window").expect("window is not initiailized");
     let ptr = rustpython_vm::obj::objint::get_value(&ptr)
         .to_usize()
         .unwrap();
@@ -371,12 +461,19 @@ pub fn mk_module(ctx: &PyContext) -> PyObjectRef {
 
         "clear" => ctx.new_rustfunc(window_clear),
 
-        "init_images" => ctx.new_rustfunc(init_images),
+        "init_sprites" => ctx.new_rustfunc(init_sprites),
         "init_anims" => ctx.new_rustfunc(init_anims),
         "init_sounds" => ctx.new_rustfunc(init_sounds),
 
         "mouse_pos" => ctx.new_rustfunc(mouse_pos),
         "mouse_wheel_delta" => ctx.new_rustfunc(mouse_wheel_delta),
+
+        "keyboard" => ctx.new_rustfunc(keyboard),
+        "keyboard_bool" => ctx.new_rustfunc(keyboard_bool),
+
+        "set_view" => ctx.new_rustfunc(set_view),
+        "update_rate" => ctx.new_rustfunc(update_rate),
+        "set_update_rate" => ctx.new_rustfunc(set_update_rate),
 
     })
 }

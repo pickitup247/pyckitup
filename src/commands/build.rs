@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use walkdir::{WalkDir, DirEntry};
 
-pub fn pyckitup_build() {
+pub fn pyckitup_build() -> std::io::Result<()> {
     println!("Deploying to `./build`");
     if !Path::new("./run.py").exists() {
         println!("File `./run.py` doesn't exist. Doing nothing.");
@@ -10,15 +10,17 @@ pub fn pyckitup_build() {
     let mut options = fs_extra::dir::CopyOptions::new();
     options.copy_inside = true;
     options.overwrite = true;
-    fs_extra::dir::copy("./static", "./build", &options);
-    std::fs::write("./build/pyckitup.js", include_bytes!("../../target/deploy/pyckitup.js").to_vec());
-    std::fs::write("./build/pyckitup.wasm", include_bytes!("../../target/deploy/pyckitup.wasm").to_vec());
-    std::fs::write("./build/server.py", include_bytes!("../../include/server.py").to_vec());
+    fs_extra::dir::copy("./static", "./build", &options).expect("Cannot copy folder");
+    std::fs::write("./build/pyckitup.js", include_bytes!("../../target/deploy/pyckitup.js").to_vec())?;
+    std::fs::write("./build/pyckitup.wasm", include_bytes!("../../target/deploy/pyckitup.wasm").to_vec())?;
+    std::fs::write("./build/server.py", include_bytes!("../../include/server.py").to_vec())?;
 
     let template = include_str!("../../include/template.html");
     let rendered = render(template);
-    std::fs::write("./build/index.html", rendered);
+    std::fs::write("./build/index.html", rendered)?;
     println!("Deployed!");
+
+    Ok(())
 }
 
 

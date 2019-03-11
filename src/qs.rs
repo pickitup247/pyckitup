@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use num_traits::ToPrimitive;
-use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol, FromPyObjectRef, TypeProtocol};
+use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol, TypeProtocol};
 
 const KEY_LIST: &[Key] = &[Key::Key1, Key::Key2, Key::Key3, Key::Key4, Key::Key5, Key::Key6, Key::Key7, Key::Key8, Key::Key9, Key::Key0, Key::A, Key::B, Key::C, Key::D,
     Key::E, Key::F, Key::G, Key::H, Key::I, Key::J, Key::K, Key::L, Key::M, Key::N, Key::O, Key::P, Key::Q, Key::R, Key::S, Key::T, Key::U, Key::V, Key::W, Key::X, Key::Y, Key::Z,
@@ -137,7 +137,7 @@ fn sound(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     let name = objstr::get_value(name);
     let sprites = sprites_mut(vm);
     sprites.execute(|sprites| {
-        sprites.get_sound(&name).unwrap().play();
+        sprites.get_sound(&name).unwrap().play()?;
         Ok(())
     }).unwrap();
     Ok(vm.get_none())
@@ -147,8 +147,7 @@ fn sprite(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     arg_check!(
         vm,
         args,
-        required = [ (name, Some(vm.ctx.str_type())) ],
-        optional = [(transform, None), (z, None)]
+        required = [ (name, Some(vm.ctx.str_type())) ]
     );
     let transform = args.kwargs.get("transform").map(|t| get_tranform_arg(t)).unwrap_or(Transform::IDENTITY);
     let z = args.kwargs.get("z").map(|z|to_i32(z)).unwrap_or(0);
@@ -188,8 +187,7 @@ fn anim(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     arg_check!(
         vm,
         args,
-        required = [(name, Some(vm.ctx.str_type()))],
-        optional = [(transform, None), (z, None)]
+        required = [(name, Some(vm.ctx.str_type()))]
     );
     let transform = args.kwargs.get("transform").map(|t| get_tranform_arg(t)).unwrap_or(Transform::IDENTITY);
     let z = args.kwargs.get("z").map(|z|to_i32(z)).unwrap_or(0);
@@ -221,6 +219,24 @@ fn anim(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
         (None, None) => panic!("anim() must have either `p0=` or `rect=` named argument"),
         (Some(_), Some(_)) => panic!("anim() must have either `p0=` or `rect=` named argument, but not both"),
     };
+
+    Ok(vm.get_none())
+}
+
+fn set_anim_duration(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
+    arg_check!(
+        vm,
+        args,
+        required = [(name, Some(vm.ctx.str_type())), (dur, Some(vm.ctx.float_type()))]
+    );
+    let name = objstr::get_value(name);
+
+    let sprites = sprites_mut(vm);
+    sprites.execute(|sprites| {
+        sprites.get_anim_mut(&name)
+            .map(|i| i.set_duration(to_f32(dur).into())).unwrap();
+        Ok(())
+    }).unwrap();
 
     Ok(vm.get_none())
 }
@@ -286,7 +302,7 @@ fn window_clear(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
 
     let color = get_color_arg(color);
     let window  = window_mut(vm);
-    window.clear(color);
+    window.clear(color).expect("Failed to clear window");
     Ok(vm.get_none())
 }
 
@@ -473,6 +489,8 @@ pub fn mk_module(ctx: &PyContext) -> PyObjectRef {
         "set_view" => ctx.new_rustfunc(set_view),
         "update_rate" => ctx.new_rustfunc(update_rate),
         "set_update_rate" => ctx.new_rustfunc(set_update_rate),
+
+        "set_anim_duration" => ctx.new_rustfunc(set_anim_duration),
 
     })
 }

@@ -13,6 +13,7 @@ pub struct Animation {
 
 impl Animation {
 
+    #[allow(unused)]
     pub fn new(src: &'static str, nframes: usize, duration: f64) -> impl Future<Item=Self, Error=Error> {
         load_file(src)
             .map(|data| Image::from_bytes(data.as_slice()))
@@ -70,6 +71,7 @@ impl Animation {
         src
     }
 
+    #[allow(unused)]
     pub fn draw(&self, window: &mut Window, pos_x: f32, pos_y: f32, scale: f32) {
         if self.played {
             return;
@@ -92,6 +94,7 @@ impl Animation {
         // window.draw(&src.area().with_center((240., 135.)), Img(&src));
     }
 
+    #[allow(unused)]
     pub fn play(&mut self) -> Result<()> {
         self.played = false;
         self.current_t = 0.;

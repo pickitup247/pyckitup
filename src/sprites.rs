@@ -5,6 +5,7 @@ pub struct Sprites {
     pub items: HashMap<String, Image>,
     pub anims: HashMap<String, Animation>,
     pub sounds: HashMap<String, Sound>,
+    #[allow(unused)]
     strings: HashMap<String, Image>,
 }
 
@@ -84,6 +85,7 @@ impl Sprites {
         self.anims.get(name)
     }
 
+    #[allow(unused)]
     pub fn get_anim_mut(&mut self, name: &str) -> Option<&mut Animation> {
         self.anims.get_mut(name)
     }
@@ -94,21 +96,6 @@ impl Sprites {
         }
         Ok(())
     }
-
-    pub fn set_duration(&mut self, duration: f64) -> Result<()> {
-        for i in self.anims.values_mut() {
-            i.set_duration(duration);
-        }
-        Ok(())
-    }
-
-
-    // pub fn draw_anim(&mut self, window: &mut Window, pos_x: f32, pos_y: f32, scale: f32) -> Result<()> {
-    //     for i in self.anims.values_mut() {
-    //         i.draw(window, pos_x, pos_y, scale);
-    //     }
-    //     Ok(())
-    // }
 
     // pub fn render_str(&mut self, s: &str) -> Image {
     //     if self.strings.contains_key(s) {

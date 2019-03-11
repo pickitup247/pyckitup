@@ -1,6 +1,5 @@
 extern crate num_traits;
 extern crate quicksilver;
-#[macro_use] extern crate lazy_static;
 #[macro_use] extern crate rustpython_vm;
 #[cfg(not(target_arch = "wasm32"))] extern crate clap;
 #[cfg(not(target_arch = "wasm32"))] extern crate fs_extra;
@@ -11,7 +10,6 @@ mod qs;
 mod sprites;
 mod anim;
 mod commands;
-use std::path::{Path, PathBuf};
 
 static mut FNAME: Option<String> = None;
 
@@ -162,14 +160,7 @@ impl State for PickItUp {
         Ok(ret)
     }
 
-    fn event(&mut self, event: &Event, window: &mut Window) -> Result<()> {
-        // match event {
-        //     Event::Key(Key::R, ButtonState::Released) => {
-        //         self.reload()?;
-        //     }
-        //     _ => {}
-        // };
-
+    fn event(&mut self, event: &Event, _window: &mut Window) -> Result<()> {
 
         if let (Some(event_fn), Some(state)) = (&self.event_fn, &self.state) {
             let evt = to_pyobjref(&mut self.vm, event);
@@ -192,6 +183,7 @@ impl State for PickItUp {
 
         self.update_window_ptr(window)?;
 
+        // invoke onload_fn
         if !self.window_initialized {
             if let (Some(onload_fn), Some(state)) = (&self.onload_fn, &self.state) {
                 match self.vm.invoke(
@@ -207,6 +199,7 @@ impl State for PickItUp {
             }
         }
 
+        // update animations
         if let Some(ref mut sprites) = &mut self.sprites {
             sprites.execute(|spr| {
                 spr.update_anim(window)?;
@@ -329,9 +322,9 @@ fn main() {
                         )
                         .get_matches();
     if let Some(matches) = matches.subcommand_matches("init") {
-        commands::init::pyckitup_init(&matches);
-    } else if let Some(matches) = matches.subcommand_matches("build") {
-        commands::build::pyckitup_build();
+        commands::init::pyckitup_init(&matches).expect("Failed to init");
+    } else if let Some(_) = matches.subcommand_matches("build") {
+        commands::build::pyckitup_build().expect("Failed to build");
     } else {
         pyckitup_run(&matches);
     }
@@ -341,7 +334,7 @@ fn main() {
 fn pyckitup_run(matches: &clap::ArgMatches) {
     let fname = matches.value_of("filename").unwrap_or("run.py");
 
-    if !Path::new(fname).exists() {
+    if !std::path::Path::new(fname).exists() {
         println!("File `./run.py` doesn't exist. Doing nothing.");
         std::process::exit(1);
     }

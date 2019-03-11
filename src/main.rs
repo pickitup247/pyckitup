@@ -2,6 +2,8 @@ extern crate num_traits;
 extern crate quicksilver;
 #[cfg(not(target_arch = "wasm32"))]
 extern crate clap;
+#[cfg(not(target_arch = "wasm32"))]
+extern crate fs_extra;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate rustpython_vm;
 #[cfg(not(target_arch = "wasm32"))]
@@ -339,7 +341,14 @@ fn main() {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn pyckitup_wasm() {
-    std::fs::create_dir(&format!("./build/"));
+    let mut options = fs_extra::dir::CopyOptions::new();
+    options.copy_inside = true;
+    options.overwrite = true;
+    fs_extra::dir::copy("./static", "./build", &options);
+    std::fs::write("./build/pyckitup.js", include_bytes!("../target/deploy/pyckitup.js").to_vec());
+    std::fs::write("./build/pyckitup.wasm", include_bytes!("../target/deploy/pyckitup.wasm").to_vec());
+    std::fs::write("./build/index.html", include_bytes!("../target/deploy/index.html").to_vec());
+    std::fs::write("./build/server.py", include_bytes!("../server.py").to_vec());
 }
 
 #[cfg(not(target_arch = "wasm32"))]

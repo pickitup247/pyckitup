@@ -6,17 +6,17 @@ extern crate quicksilver;
 #[cfg(not(target_arch = "wasm32"))] extern crate fs_extra;
 #[cfg(not(target_arch = "wasm32"))] extern crate walkdir;
 #[cfg(not(target_arch = "wasm32"))] use clap::{Arg, App, SubCommand};
-#[cfg(not(target_arch = "wasm32"))] use walkdir::{WalkDir, DirEntry};
 mod prelude;
 mod qs;
 mod sprites;
 mod anim;
+mod commands;
+use std::path::{Path, PathBuf};
 
 static mut FNAME: Option<String> = None;
 
 use crate::prelude::*;
 use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol};
-use std::path::{Path, PathBuf};
 
 struct PickItUp {
     vm: VirtualMachine,
@@ -298,6 +298,10 @@ fn to_pyobjref(vm: &mut VirtualMachine, event: &Event) -> PyObjectRef {
     }
     d
 }
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    run::<PickItUp>("pickitup", Vector::new(800, 600), Settings::default());
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
@@ -324,102 +328,13 @@ fn main() {
                             .about("deploy for web")
                         )
                         .get_matches();
-
     if let Some(matches) = matches.subcommand_matches("init") {
-        pyckitup_init(&matches);
+        commands::init::pyckitup_init(&matches);
     } else if let Some(matches) = matches.subcommand_matches("build") {
-        pyckitup_wasm();
+        commands::build::pyckitup_build();
     } else {
         pyckitup_run(&matches);
     }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn main() {
-    run::<PickItUp>("pickitup", Vector::new(800, 600), Settings::default());
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn pyckitup_wasm() {
-    println!("Deploying to `./build`");
-    if !Path::new("./run.py").exists() {
-        println!("File `./run.py` doesn't exist. Doing nothing.");
-        std::process::exit(1);
-    }
-    let mut options = fs_extra::dir::CopyOptions::new();
-    options.copy_inside = true;
-    options.overwrite = true;
-    fs_extra::dir::copy("./static", "./build", &options);
-    std::fs::write("./build/pyckitup.js", include_bytes!("../target/deploy/pyckitup.js").to_vec());
-    std::fs::write("./build/pyckitup.wasm", include_bytes!("../target/deploy/pyckitup.wasm").to_vec());
-    std::fs::write("./build/server.py", include_bytes!("../include/server.py").to_vec());
-
-    let template = include_str!("../include/template.html");
-    let rendered = render(template);
-    std::fs::write("./build/index.html", rendered);
-    println!("Deployed!");
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn is_py(entry: &DirEntry) -> bool {
-    entry.file_name()
-        .to_str()
-        .map(|s| s.ends_with(".py"))
-        .unwrap_or(false)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn read_file(path: &PathBuf) -> String {
-    use std::io::Read;
-    let mut f = std::fs::File::open(&path).unwrap();
-    let mut buffer = String::new();
-    f.read_to_string(&mut buffer).unwrap();
-    buffer
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn render(tmpl: &str) -> String {
-    let mut files = vec![];
-    for entry in WalkDir::new(".").into_iter().filter_map(|e| e.ok()) {
-        if is_py(&entry)
-        && !entry.path().starts_with("./build")
-        && !entry.path().starts_with("./static")
-        {
-            files.push(entry.path().to_owned());
-            // println!("Python file: {:?}", entry);
-        }
-    }
-
-    let mut code = String::new();
-
-    code.push_str("console.log('Begin loading Python files...');\n");
-    code.push_str("window.localStorage.clear();\n");
-    for (i, (content, path)) in files.into_iter().map(|i|(read_file(&i), i)).enumerate() {
-        let var_name = format!("file_{}", i);
-        code.push_str(&format!("let {} = `{}`;\n", var_name, content));
-        let path_stripped = path.as_path().strip_prefix("./").unwrap().to_str().unwrap();
-        code.push_str(&format!("window.localStorage.setItem(\"{}\", btoa({}));\n", path_stripped, var_name));
-    }
-    code.push_str("console.log('Finished loading Python.');\n");
-    tmpl.to_owned().replace("INSERTCODEHERE", &code)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn pyckitup_init(matches: &clap::ArgMatches) {
-    let project_name = matches.value_of("project").unwrap_or("new_pyckitup_project");
-    if Path::new(&format!("./{}", project_name)).exists() {
-        println!("Path ./{} already exists. Doing nothing.", project_name);
-        std::process::exit(1);
-    }
-
-    println!("Initializing pyckitup project in directory `./{}`", project_name);
-    std::fs::create_dir(&format!("./{}/", project_name));
-    std::fs::create_dir(&format!("./{}/static/", project_name));
-    std::fs::write(&format!("./{}/static/click.wav", project_name), include_bytes!("../include/click.wav").to_vec());
-    std::fs::write(&format!("./{}/run.py", project_name), include_bytes!("../examples/clock.py").to_vec());
-    std::fs::write(&format!("./{}/common.py", project_name), include_bytes!("../examples/common.py").to_vec());
-    std::fs::write(&format!("./{}/.gitignore", project_name), include_bytes!("../include/gitignore").to_vec());
-    println!("Initialized. To run: `pyckitup`");
 }
 
 #[cfg(not(target_arch = "wasm32"))]

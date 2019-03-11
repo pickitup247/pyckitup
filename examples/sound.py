@@ -2,9 +2,7 @@ import qs
 from common import *
 
 def init():
-    qs.init_sounds([
-        ["click", "click.wav"]
-    ])
+    qs.init_sounds([ ["click", "click.wav"] ])
     return None
 
 def draw(_):

@@ -11,6 +11,7 @@ mod anim;
 
 use crate::prelude::*;
 use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol};
+use std::path::Path;
 
 static mut FNAME: Option<String> = None;
 
@@ -20,11 +21,14 @@ struct PickItUp {
 
     update_fn: Option<PyObjectRef>,
     draw_fn: Option<PyObjectRef>,
+    onload_fn: Option<PyObjectRef>,
     event_fn: Option<PyObjectRef>,
     state: Option<PyObjectRef>,
 
+    window_initialized: bool,
+
     resources: Resources,
-    loaded: bool,
+    code_loaded: bool,
 }
 
 fn handle_err(vm: &mut VirtualMachine, py_err: PyObjectRef) -> Result<()> {
@@ -66,13 +70,14 @@ impl PickItUp {
         self.sprites = Some(Asset::new(Sprites::new(self.resources.clone())));
 
         self.update_fn = scope.get_item("update");
+        self.onload_fn = scope.get_item("onload");
         self.draw_fn = scope.get_item("draw");
         self.event_fn = scope.get_item("event");
 
         let sprites_ptr = (self.sprites.as_ref().unwrap() as *const Asset<Sprites>) as usize;
         qs.set_item(&self.vm.ctx, "sprites", self.vm.new_int(sprites_ptr));
 
-        self.loaded = true;
+        self.code_loaded = true;
 
         Ok(())
     }
@@ -111,9 +116,11 @@ impl State for PickItUp {
             update_fn: None,
             draw_fn: None,
             event_fn: None,
+            onload_fn: None,
             state: None,
             resources,
-            loaded: false,
+            code_loaded: false,
+            window_initialized: false,
         };
         ret.setup_module()?;
         let (source, code_path) = if cfg!(target_arch = "wasm32") {
@@ -138,7 +145,7 @@ impl State for PickItUp {
                 let mut s = String::new();
                 let f = std::fs::File::open(&code_path);
                 match f {
-                    Err(_) => panic!(format!("File `{}` is not found.", FNAME)),
+                    Err(_) => panic!(format!("File `{}` is not found.", FNAME.as_ref().unwrap())),
                     Ok(mut f) => {
                         f.read_to_string(&mut s).unwrap();
                         (s, code_path.to_owned())
@@ -177,10 +184,24 @@ impl State for PickItUp {
     }
 
     fn update(&mut self, window: &mut Window) -> Result<()> {
-        if !self.loaded {return Ok(())}
+        if !self.code_loaded {return Ok(())}
 
         self.update_window_ptr(window)?;
 
+        if !self.window_initialized {
+            if let (Some(onload_fn), Some(state)) = (&self.onload_fn, &self.state) {
+                match self.vm.invoke(
+                    Rc::clone(onload_fn),
+                    PyFuncArgs::new(vec![Rc::clone(state)], vec![]),
+                ) {
+                    Err(py_err) => {
+                        handle_err(&mut self.vm, py_err)?;
+                    }
+                    Ok(_) => {}
+                };
+                self.window_initialized = true;
+            }
+        }
 
         if let Some(ref mut sprites) = &mut self.sprites {
             sprites.execute(|spr| {
@@ -206,7 +227,7 @@ impl State for PickItUp {
 
     fn draw(&mut self, window: &mut Window) -> Result<()> {
         window.clear(Color::BLACK)?;
-        if !self.loaded {return Ok(())}
+        if !self.code_loaded {return Ok(())}
 
         if let (Some(draw_fn), Some(state)) = (&self.draw_fn, &self.state) {
             match self.vm.invoke(
@@ -287,18 +308,47 @@ fn main() {
                             .value_name("FNAME")
                             .help("filename, defaults to run.py")
                             .takes_value(true))
+                        .subcommand( SubCommand::with_name("init")
+                            .about("initialize a new pyckitup project")
+                            .arg(
+                                Arg::with_name("project")
+                                .help("name of the project")
+                            )
+                        )
                         .get_matches();
 
+    if let Some(matches) = matches.subcommand_matches("init") {
+        pyckitup_init(&matches);
+    } else {
+        pyckitup_run(&matches);
+    }
+}
+
+fn pyckitup_init(matches: &clap::ArgMatches) {
+    let project_name = matches.value_of("project").unwrap_or("new_pyckitup_project");
+    if Path::new(&format!("./{}", project_name)).exists() {
+        println!("Path ./{} already exists. Doing nothing.", project_name);
+        std::process::exit(1);
+    }
+
+    println!("Initializing pyckitup project in directory `./{}`", project_name);
+    std::fs::create_dir(&format!("./{}/", project_name));
+    std::fs::create_dir(&format!("./{}/static/", project_name));
+    std::fs::write(&format!("./{}/static/click.wav", project_name), include_bytes!("../static/click.wav").to_vec());
+    std::fs::write(&format!("./{}/run.py", project_name), include_bytes!("../examples/clock.py").to_vec());
+    std::fs::write(&format!("./{}/common.py", project_name), include_bytes!("../examples/common.py").to_vec());
+    println!("Initialized. To run: `pyckitup`");
+}
+
+fn pyckitup_run(matches: &clap::ArgMatches) {
     let (w, h) = {
-        let size = matches.value_of("size").unwrap_or("480x270");
+        let size = matches.value_of("size").unwrap_or("800x600");
         let ret: Vec<i32> = size.split("x").map(|i| i.parse().unwrap()).collect();
         (ret[0], ret[1])
     };
 
-    {
-        let fname = matches.value_of("filename").unwrap_or("run.py");
-        unsafe { FNAME = Some(fname.to_owned()); }
-    };
+    let fname = matches.value_of("filename").unwrap_or("run.py");
+    unsafe { FNAME = Some(fname.to_owned()); }
 
     run::<PickItUp>("pickitup", Vector::new(w, h), Settings::default());
 }

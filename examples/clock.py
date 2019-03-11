@@ -2,6 +2,7 @@ import qs
 from common import *
 
 def init():
+    qs.init_sounds([ ["click", "click.wav"] ])
     return {
         "elapsed": 0,
         "hours": 0,
@@ -9,14 +10,17 @@ def init():
         "seconds": 0,
     }
 
-def update(state):
+def onload(_):
     qs.set_update_rate(1000)
+
+def update(state):
     state["elapsed"] += qs.update_rate()
     elapsed = state["elapsed"]
     state["seconds"] = (elapsed / 1000.) % 60.
     state["minutes"] = ((elapsed / 1000.) / 60.) % 60.
     state["hours"] = ((elapsed / 1000.) / 60. / 24.) % 24.
 
+    qs.sound("click")
 
 def draw(state):
     qs.clear(WHITE)

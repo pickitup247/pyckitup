@@ -14,7 +14,7 @@ mod anim;
 
 use crate::prelude::*;
 use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 struct PickItUp {
     vm: VirtualMachine,
@@ -356,17 +356,38 @@ fn is_py(entry: &DirEntry) -> bool {
         .unwrap_or(false)
 }
 
+fn read_file(path: &PathBuf) -> String {
+    use std::io::Read;
+    let mut f = std::fs::File::open(&path).unwrap();
+    let mut buffer = String::new();
+    f.read_to_string(&mut buffer).unwrap();
+    buffer
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn render(template: &str) -> String {
-    let code = "";
+    let mut files = vec![];
     for entry in WalkDir::new(".").into_iter().filter_map(|e| e.ok()) {
         if is_py(&entry)
         && !entry.path().starts_with("./build")
         && !entry.path().starts_with("./static")
         {
-            dbg!(&entry);
+            files.push(entry.path().to_owned());
+            // println!("Python file: {:?}", entry);
         }
     }
+
+    let mut code = String::new();
+
+    code.push_str("console.log('Begin loading Python files...')");
+    code.push_str("window.localStorage.clear()");
+    for (i, (content, path)) in files.into_iter().map(|i|(read_file(&i), i)).enumerate() {
+        let var_name = format!("file_{}", i);
+        code.push_str(&format!("let {} = `{}`;\n", var_name, content));
+        let path_stripped = path.as_path().strip_prefix("./").unwrap().to_str().unwrap();
+        code.push_str(&format!("window.localStorage.setItem(\"{}\", btoa({}));\n", path_stripped, var_name));
+    }
+    code.push_str("console.log('Finished loading Python.')");
 
     // let run = `import qs
     // import test
@@ -382,7 +403,7 @@ fn render(template: &str) -> String {
     // `;
     //  window.localStorage.setItem("test.py", btoa(test))
 
-    template.to_owned().replace("INSERTCODEHERE", code)
+    template.to_owned().replace("INSERTCODEHERE", &code)
 }
 
 #[cfg(not(target_arch = "wasm32"))]

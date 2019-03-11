@@ -123,6 +123,7 @@ impl State for PickItUp {
             )
         } else {
             use std::io::Read;
+            // requires special handling because of complications in static folder of cargo-web
             let dir = {
                 let dir = std::env::current_dir().unwrap();
                 if dir.ends_with("static") {
@@ -134,10 +135,15 @@ impl State for PickItUp {
 
             unsafe {
                 let code_path = dir.clone() + "/" + FNAME.as_ref().unwrap();
-                dbg!(&code_path);
                 let mut s = String::new();
-                std::fs::File::open(&code_path).unwrap().read_to_string(&mut s).unwrap();
-                (s, code_path.to_owned())
+                let f = std::fs::File::open(&code_path);
+                match f {
+                    Err(_) => panic!(format!("File `{}` is not found.", FNAME)),
+                    Ok(mut f) => {
+                        f.read_to_string(&mut s).unwrap();
+                        (s, code_path.to_owned())
+                    }
+                }
             }
 
         };
@@ -278,8 +284,6 @@ fn main() {
                             .help("size, WxH, defaults to 480x270")
                             .takes_value(true))
                         .arg(Arg::with_name("filename")
-                            .short("f")
-                            .long("filename")
                             .value_name("FNAME")
                             .help("filename, defaults to run.py")
                             .takes_value(true))

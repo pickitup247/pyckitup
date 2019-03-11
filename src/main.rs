@@ -1,8 +1,10 @@
 extern crate num_traits;
 extern crate quicksilver;
+#[cfg(not(target_arch = "wasm32"))]
 extern crate clap;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate rustpython_vm;
+#[cfg(not(target_arch = "wasm32"))]
 use clap::{Arg, App, SubCommand};
 mod prelude;
 mod qs;
@@ -295,6 +297,7 @@ fn to_pyobjref(vm: &mut VirtualMachine, event: &Event) -> PyObjectRef {
     d
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
     let matches = App::new("pickitup")
                         .version("0.1")
@@ -308,22 +311,38 @@ fn main() {
                             .value_name("FNAME")
                             .help("filename, defaults to run.py")
                             .takes_value(true))
-                        .subcommand( SubCommand::with_name("init")
+                        .subcommand(SubCommand::with_name("init")
                             .about("initialize a new pyckitup project")
                             .arg(
                                 Arg::with_name("project")
                                 .help("name of the project")
                             )
                         )
+                        .subcommand(SubCommand::with_name("build")
+                            .about("deploy for web")
+                        )
                         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("init") {
         pyckitup_init(&matches);
+    } else if let Some(matches) = matches.subcommand_matches("build") {
+        pyckitup_wasm();
     } else {
         pyckitup_run(&matches);
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    run::<PickItUp>("pickitup", Vector::new(800, 600), Settings::default());
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn pyckitup_wasm() {
+    std::fs::create_dir(&format!("./build/"));
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn pyckitup_init(matches: &clap::ArgMatches) {
     let project_name = matches.value_of("project").unwrap_or("new_pyckitup_project");
     if Path::new(&format!("./{}", project_name)).exists() {
@@ -340,6 +359,7 @@ fn pyckitup_init(matches: &clap::ArgMatches) {
     println!("Initialized. To run: `pyckitup`");
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn pyckitup_run(matches: &clap::ArgMatches) {
     let (w, h) = {
         let size = matches.value_of("size").unwrap_or("800x600");

@@ -6,9 +6,11 @@ edition = "2018"
 
 [dependencies]
 rustpython_vm = { path = "../RustPython/vm", version = "*" }
-clap = "*"
 num-traits = "0.2"
 lazy_static = "1.3.0"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+clap = "*"
 
 [dependencies.quicksilver]
 version = "0.3.7"

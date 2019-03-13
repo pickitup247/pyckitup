@@ -119,5 +119,5 @@ build: false
 #directly or perform other testing commands. Rust will automatically be placed in the PATH
 # environment variable.
 test_script:
-  - cargo web deploy --release --target=wasm32-unknown-unknown
+  - cargo-web deploy --release --target=wasm32-unknown-unknown
   - cargo test --verbose %cargoflags%

@@ -107,7 +107,7 @@ install:
   - set PATH=%PATH%;%USERPROFILE%\.cargo\bin
   - rustc -vV
   - cargo -vV
-  - cargo install --git https://github.com/GTRI-nathan/cargo-web.git cargo-web --force
+  - cargo install --git https://github.com/rickyhan/cargo-web.git cargo-web --force
 
 ## Build Script ##
 

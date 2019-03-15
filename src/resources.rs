@@ -113,7 +113,7 @@ impl Resources {
         Ok(())
     }
 
-    pub fn render_str<'a>(&'a mut self, font_name: Option<String>, s: &str, store_in_cache: bool) -> Cow<'a, Image> {
+    pub fn render_str<'a>(&'a mut self, font_name: Option<String>, s: &str, style: FontStyle, store_in_cache: bool) -> Cow<'a, Image> {
         let font_name = &font_name.unwrap_or("default".to_owned());
         if store_in_cache
         && self.rendered_strings.contains_key(font_name.as_str())
@@ -124,7 +124,6 @@ impl Resources {
             Cow::Borrowed(ret)
         } else {
             let font = self.fonts.get(font_name).unwrap();
-            let style = FontStyle::new(90.0, Color::BLACK);
             let img = font.render(&s, &style).unwrap();
             if store_in_cache {
                 let font_hm = self.rendered_strings.entry(font_name.to_owned()).or_insert(HashMap::new());

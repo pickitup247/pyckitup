@@ -16,6 +16,13 @@ def rotate(deg):
         [0, 0, 1]
     ]
 
+def translate(x, y):
+    return [
+        [1, 0, x],
+        [0, 1, y],
+        [0, 0, 1]
+    ]
+
 def scale(x, y):
     return [
         [x, 0, 0],

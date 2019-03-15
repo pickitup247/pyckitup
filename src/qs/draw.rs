@@ -63,17 +63,21 @@ pub(crate) fn text(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
     );
     let transform = args.kwargs.get("transform").map(|t| get_tranform_arg(t)).unwrap_or(Transform::IDENTITY);
     let z = args.kwargs.get("z").map(|z|to_i32(z)).unwrap_or(0);
+    let pt = args.kwargs.get("pt").map(|z|to_f32(z)).unwrap_or(90.);
+    let color = args.kwargs.get("color").map(get_color_arg).unwrap_or(Color::BLACK);
 
     let font = args.kwargs.get("font").map(objstr::get_value);
     let store_in_cache = args.kwargs.get("store_in_cache").map(objbool::get_value).unwrap_or(true);
     let text = objstr::get_value(text);
+
+    let style = FontStyle::new(pt, color);
 
     let (window, sprites) = window_sprites_mut(vm);
     match (args.kwargs.get("rect"), args.kwargs.get("p0")) {
         (Some(loc), None) => {
             let coord = get_rect_arg(loc);
             sprites.execute(|resources| {
-                let im = resources.render_str(font, &text, store_in_cache);
+                let im = resources.render_str(font, &text, style, store_in_cache);
                 window.draw_ex(&coord, Img(&im), transform, z);
                 Ok(())
             }).unwrap();
@@ -82,7 +86,7 @@ pub(crate) fn text(vm: &mut VirtualMachine, args: PyFuncArgs) -> PyResult {
             let (p0x, p0y) = get_point_arg(&get_elements(p0));
             let pos = Vector::new(p0x, p0y);
             sprites.execute(|resources| {
-                let im = resources.render_str(font, &text, store_in_cache);
+                let im = resources.render_str(font, &text, style, store_in_cache);
                 let Rectangle {pos:_, size} = im.area();
                 window.draw_ex(&Rectangle{pos, size}, Img(&im), transform, z);
                 Ok(())

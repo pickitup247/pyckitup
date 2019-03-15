@@ -4,6 +4,9 @@ set -ex
 
 # TODO This is the "test phase", tweak it as you see fit
 main() {
+    cargo install --git https://github.com/rickyhan/cargo-web.git cargo-web --force
+    cargo-web deploy --release --target=wasm32-unknown-unknown
+
     cross build --target $TARGET
     cross build --target $TARGET --release
 

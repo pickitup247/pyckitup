@@ -7,7 +7,7 @@ extern crate quicksilver;
 #[cfg(not(target_arch = "wasm32"))] use clap::{Arg, App, SubCommand};
 mod prelude;
 mod qs;
-mod sprites;
+mod resources;
 mod anim;
 mod commands;
 
@@ -18,7 +18,7 @@ use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol};
 
 struct PickItUp {
     vm: VirtualMachine,
-    sprites: Option<Asset<Sprites>>,
+    resources: Option<Asset<Resources>>,
 
     update_fn: Option<PyObjectRef>,
     draw_fn: Option<PyObjectRef>,
@@ -28,7 +28,7 @@ struct PickItUp {
 
     window_initialized: bool,
 
-    resources: Resources,
+    resource_cfg: ResourceConfig,
     code_loaded: bool,
 }
 
@@ -56,7 +56,7 @@ impl PickItUp {
             }
         };
 
-        let resources_ptr = (&self.resources as *const Resources) as usize;
+        let resources_ptr = (&self.resource_cfg as *const ResourceConfig) as usize;
         let modules = self.vm.sys_module.get_attr("modules").ok_or(Error::ContextError("no attr modules".to_owned()))?;
         let qs = modules.get_item(MOD_NAME).ok_or(Error::ContextError("no module called qs".to_owned()))?;
         qs.set_item(&self.vm.ctx, "resources", self.vm.new_int(resources_ptr));
@@ -68,15 +68,15 @@ impl PickItUp {
             None => self.vm.get_none(),
         });
         // create sprites based on resources
-        self.sprites = Some(Asset::new(Sprites::new(self.resources.clone())));
+        self.resources = Some(Asset::new(Resources::new(self.resource_cfg.clone())));
 
         self.update_fn = scope.get_item("update");
         self.onload_fn = scope.get_item("onload");
         self.draw_fn = scope.get_item("draw");
         self.event_fn = scope.get_item("event");
 
-        let sprites_ptr = (self.sprites.as_ref().unwrap() as *const Asset<Sprites>) as usize;
-        qs.set_item(&self.vm.ctx, "sprites", self.vm.new_int(sprites_ptr));
+        let resources_ptr = (self.resources.as_ref().unwrap() as *const Asset<Resources>) as usize;
+        qs.set_item(&self.vm.ctx, "sprites", self.vm.new_int(resources_ptr));
 
         self.code_loaded = true;
 
@@ -97,9 +97,9 @@ impl PickItUp {
         let qs = modules.get_item(MOD_NAME).ok_or(Error::ContextError("MOD_NAME".to_owned()))?;
         qs.set_item(&self.vm.ctx, "window", self.vm.new_int(window_ptr));
 
-        if self.sprites.is_some() {
-            let sprites_ptr = (self.sprites.as_ref().unwrap() as *const Asset<Sprites>) as usize;
-            qs.set_item(&self.vm.ctx, "sprites", self.vm.new_int(sprites_ptr));
+        if self.resources.is_some() {
+            let resources_ptr = (self.resources.as_ref().unwrap() as *const Asset<Resources>) as usize;
+            qs.set_item(&self.vm.ctx, "sprites", self.vm.new_int(resources_ptr));
         }
 
         Ok(())
@@ -109,17 +109,17 @@ impl PickItUp {
 impl State for PickItUp {
     fn new() -> Result<Self> {
         let vm = VirtualMachine::new();
-        let sprites = None;
-        let resources = (vec![],vec![],vec![]);
+        let resources = None;
+        let resource_cfg = Default::default();
         let mut ret = PickItUp {
             vm,
-            sprites,
+            resources,
             update_fn: None,
             draw_fn: None,
             event_fn: None,
             onload_fn: None,
             state: None,
-            resources,
+            resource_cfg,
             code_loaded: false,
             window_initialized: false,
         };
@@ -200,7 +200,7 @@ impl State for PickItUp {
         }
 
         // update animations
-        if let Some(ref mut sprites) = &mut self.sprites {
+        if let Some(ref mut sprites) = &mut self.resources {
             sprites.execute(|spr| {
                 spr.update_anim(window)?;
                 Ok(())

@@ -1,10 +1,10 @@
 pub use std::cell::RefCell;
 pub use std::rc::Rc;
 
+pub use num_traits::ToPrimitive;
+pub use rustpython_vm::pyobject::{AttributeProtocol, DictProtocol, TypeProtocol};
 
-// imgs, anims, sounds
-pub type Resources = (Vec<(String, String)>, Vec<(String, String, (usize,f64))>, Vec<(String, String)>);
-pub use crate::sprites::Sprites;
+pub use crate::resources::{Resources, ResourceConfig};
 pub use crate::anim::Animation;
 pub use quicksilver::{
     geom::{Circle, Line, Rectangle, Transform, Triangle, Vector},
@@ -26,8 +26,9 @@ pub use quicksilver::{
 
 pub use rustpython_vm::{
     compile,
-    obj::objstr,
     obj::{
+        objstr,
+        objbool,
         objfloat,
         objint::{self, PyInt},
         objsequence::get_elements,

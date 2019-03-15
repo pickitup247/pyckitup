@@ -10,6 +10,12 @@ env:
   global:
     - CRATE_NAME=pyckitup
 
+addons:
+    apt:
+        packages:
+            - libasound2-dev
+
+
 matrix:
   # These are all the build jobs. Adjust as necessary. Comment out what you
   # don't need
